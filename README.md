@@ -138,12 +138,20 @@ make seed && make run
 - **默认源聚合**：同一 `src-openeuler` 包在 `OS/everything/EPOL/debuginfo/source/update/update-source` 分散存在。
   采集按源聚合：version 取二进制源（OS/everything/EPOL/update）中的**最新**（`latest_repo` 标记来源），并打
   `has_source`/`has_debug`/`in_epol`/`in_update` 标记（见 `collectors/openeuler.collect_stream_inventory`）。
-- **Python/pip 治理**：`python-*` 分为 系统 Python 运行时（`python3*`/`libpython`，P0 不日落）与 **pip 模块**
-  （`python-requests` 等，对应 PyPI）。对 pip 模块采集 PyPI 画像，判定 ① 上游是否停更（>730 天）、
-  ② `Requires-Python` 是否被系统 Python（如 3.11）满足（不满足=“Python 版本屏障”，不能盲目升级）、
-  ③ 反向依赖压力；仅当 **PyPI 停更 + 无反向依赖 + 非核心** 才建议日落（见 `engine/python_gov.py`）。
+- **Python/pip 治理**：系统源仅保留为其他系统软件包提供运行时依赖的 pip 模块，按依赖关系分档处置：
+  被核心/关键包（含系统 Python 闭包）依赖的保留并优先对齐上游；仅被非关键包依赖的标记迁移提示，
+  建议依赖方改用 venv 或打包方案（PyInstaller、shiv、pex、内嵌 venv、容器镜像等）；无依赖方的一律
+  建议日落。PyPI 画像（上游停更 >730 天、`Requires-Python` 版本屏障）作为风险备注保留
+  （见 `engine/python_gov.py`）。
+- **Node.js/npm 治理**：判定逻辑相同。系统源仅维护被关键包强制依赖的 `nodejs-*` 模块，其余视为开发
+  工具：无关键依赖的建议日落，仅被非关键包依赖的标记迁移提示。Node.js 运行时与包管理器本身
+  （`nodejs`/`npm`/`pnpm`/`yarn` 等，见 `node_toolchain` 规则与 `engine/nodejs_gov.py`）作为开发者
+  生态入口保留维护，不参与日落。
 - **反向依赖**：从 `primary.xml` 的 `provides/requires` 建图，得到“有多少其它源包依赖我”，用于重要性判定；
-  用**百分位**而非原始阈值，避免基础库把直方图吞掉。
+  用**百分位**而非原始阈值，避免基础库把直方图吞掉。capability 归一化保留命名空间参数
+  （`python3dist(x)`/`npm(x)` 完整匹配，不可按 `(` 截断，否则整个语言生态塌缩成一个伪超级节点）；
+  SONAME 剥版本标记保留架构后缀（`libcrypto.so.3(OPENSSL_3.0.0)(64bit)` → `libcrypto.so.3()(64bit)`）。
+  Python 闭包 BFS 只沿 python 命名空间边扩展，避免经 libm→glibc→kernel 等真实但无关的边溢出半个发行版。
 - **活跃度分级**：月度序列（提交 + PR + Issue）指数衰减加权，1/3/6/12 月滚动 → A/B/C/D；
   无实测数据不武断给 D，标记为“N/A（待采集）”。
 - **日落严格化**：仅当 D + 无反向依赖 + 非关键/非 Python 关键才建议日落，避免误杀有依赖的包。

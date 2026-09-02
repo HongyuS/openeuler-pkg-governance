@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app import config
-from app.engine import compare, disposal, effort, grading, importance, python_gov
+from app.engine import compare, disposal, effort, grading, importance, nodejs_gov, python_gov
 from app.engine.rules_loader import rules
 from app.models import Governance, Package, RepoSignals
 from app.utils import LOG, iso_today
@@ -39,7 +39,13 @@ def build_packages(
     sys_python = python_gov.system_python_version(inventory)
 
     classifications = importance.classify(inventory)
-    # Pre-compute the provide map once for reuse in classification (already done).
+    # Packages whose dependency forces a language module to stay in the system
+    # repo: core/key packages plus the system Python runtime closure.
+    system_set = {
+        name
+        for name, cls in classifications.items()
+        if cls["importance"] == "core" or cls["is_key_package"] or cls.get("in_python_closure")
+    }
     packages: list[Package] = []
     for name, rec in inventory.items():
         cls = classifications.get(
@@ -104,6 +110,7 @@ def build_packages(
             special_note=special_note,
             data_date=data_date,
         )
-        pkg = python_gov.apply_python(pkg, inventory, pypi_profiles, sys_python)
+        pkg = python_gov.apply_python(pkg, inventory, pypi_profiles, sys_python, system_set)
+        pkg = nodejs_gov.apply_nodejs(pkg, system_set)
         packages.append(pkg)
     return packages

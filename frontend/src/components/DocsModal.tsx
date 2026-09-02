@@ -72,10 +72,19 @@ export function DocsModal(props: { onClose: () => void }) {
 
           <h4>Python/pip 包治理</h4>
           <p>
-            <code>python-*</code> 分为 系统 Python 运行时（<code>python3*</code>/<code>libpython</code>，P0 不日落）与
-            <b>pip 模块</b>（对应 PyPI 上游）。对 pip 模块采集 PyPI 画像：上游是否停更（&gt;730 天）、
-            <code>Requires-Python</code> 是否被系统 Python 满足（不满足即"Python 版本屏障"）、反向依赖压力；
-            仅在 <b>PyPI 停更 + 无反向依赖 + 非核心</b> 时建议日落，其余给出明确处置提示。
+            系统源仅保留为其他系统软件包提供运行时依赖的 pip 模块，按依赖关系分档处置：
+            被核心/关键包（含系统 Python 运行时闭包）依赖的保留并优先对齐上游；仅被非关键包依赖的
+            标记迁移提示，建议依赖方改用 venv 或打包方案（PyInstaller、shiv、pex、内嵌 venv、容器镜像等）；
+            无依赖方的一律建议日落。PyPI 画像（上游停更 &gt;730 天、<code>Requires-Python</code> 版本屏障）
+            作为风险备注保留。
+          </p>
+
+          <h4>Node.js/npm 包治理</h4>
+          <p>
+            判定逻辑相同：系统源仅维护被关键包强制依赖的 <code>nodejs-*</code> 模块，其余视为开发工具，
+            由 npm/pnpm/bun 生态承接——无关键依赖的建议日落，仅被非关键包依赖的标记迁移提示。
+            Node.js 运行时与包管理器本身（<code>nodejs</code>/<code>npm</code>/<code>pnpm</code> 等，
+            见 <code>node_toolchain</code> 规则）作为开发者生态入口保留维护，不参与日落。
           </p>
 
           <h4>运行</h4>

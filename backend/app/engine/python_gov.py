@@ -1,10 +1,13 @@
 """Python / pip package governance.
 
-Third-party Python modules arrive as ``python-<name>`` source packages. Whether
-they should be sunset depends on upstream-maintenance (PyPI release cadence),
-Python-version compatibility, and reverse-dependency pressure. We keep the
-system Python runtime untouched and apply a *conservative* sunset rule to pip
-modules only.
+Third-party Python modules arrive as ``python-<name>`` source packages. Normal
+Python projects should build their own venv rather than rely on the system
+site-packages, so the system repo keeps only pip modules that serve other
+system packages: modules depended on by critical/key packages stay, modules
+depended on only by non-critical packages get a migration notice (venv /
+bundling such as PyInstaller, shiv, pex), and modules with no dependents are
+sunset. PyPI upstream staleness and Requires-Python compatibility remain as
+risk notes.
 """
 
 from __future__ import annotations
@@ -74,8 +77,9 @@ def apply_python(
     inventory: dict[str, dict],
     pypi_profiles: dict[str, dict],
     sys_python: str,
+    system_set: set[str] | None = None,
 ) -> Package:
-    """Attach a python profile + conservative sunset adjustment to a package."""
+    """Attach a python profile + dependency-driven disposal to a package."""
     name = pkg.name
     if not pypi_collect.is_pip_module(name):
         return pkg
@@ -112,16 +116,41 @@ def apply_python(
         "notes": note,
     }
 
-    # Conservative sunset: PyPI stale + no meaningful reverse pressure + not core.
-    if prof.get("pypi_stale") and pkg.governance.reverse_deps == 0 and pkg.governance.importance != "core":
-        pkg.governance.disposal = "sunset"
-        pkg.governance.sunset_candidate = True
-        pkg.governance.maintenance_notes.append(
-            "Python/pip 模块：PyPI 上游已停更且无反向依赖、非核心，建议日落。"
+    # Dependency-driven disposal: system Python packages exist to serve other
+    # system packages; everything else belongs to venv/pip or bundling.
+    gov = pkg.governance
+    system_set = system_set or set()
+    sys_deps = [d for d in gov.dependents if d in system_set]
+    other_deps = [d for d in gov.dependents if d not in system_set]
+
+    def _fmt(names: list[str]) -> str:
+        shown = ", ".join(names[:5])
+        return shown + ("…" if len(names) > 5 else "")
+
+    if sys_deps:
+        gov.maintenance_notes.append(
+            f"被系统/关键包 [{_fmt(sys_deps)}] 依赖：保留在系统源并优先对齐上游。"
         )
-    elif prof.get("pypi_stale"):
-        pkg.governance.maintenance_notes.append(
-            "Python/pip 模块：PyPI 上游停更，但仍被依赖，需维持并评估替代。"
+        if prof.get("pypi_stale"):
+            gov.maintenance_notes.append(
+                "Python/pip 模块：PyPI 上游停更，但仍被系统包依赖，需维持并评估替代。"
+            )
+    elif other_deps:
+        gov.maintenance_notes.append(
+            f"仅被非关键包 [{_fmt(other_deps)}] 依赖：通告并敦促依赖方维护者转向 "
+            "venv/bundle 方式（PyInstaller、shiv、pex、打包 venv、容器镜像等，AI 类软件尤应如此），"
+            "过渡期后退出系统源。"
         )
+        if prof.get("pypi_stale"):
+            gov.maintenance_notes.append(
+                "Python/pip 模块：PyPI 上游停更，但仍被依赖，需维持并评估替代。"
+            )
+    else:
+        gov.disposal = "sunset"
+        gov.sunset_candidate = True
+        reason = "无系统包依赖的 pip 模块应退出系统源，由 pip/venv 生态承接"
+        if prof.get("pypi_stale"):
+            reason += "；PyPI 上游亦已停更"
+        gov.maintenance_notes.append(reason + "，建议日落。")
     pkg.governance.maintenance_notes.extend(note)
     return pkg

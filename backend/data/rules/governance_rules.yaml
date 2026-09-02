@@ -85,6 +85,18 @@ P1_base:
   - "java-17-openjdk"
   - "java-1.8.0-openjdk"
 
+# Node.js toolchain the system repo must actively maintain (runtime + package
+# managers). nodejs-* modules beyond critical-package dependency are treated
+# as development tools and sunset.
+node_toolchain:
+  - "nodejs"
+  - "node"
+  - "npm"
+  - "pnpm"
+  - "yarn"
+  - "corepack"
+  - "bun"
+
 # Special / unusual packages that must follow an independent fast-update channel.
 # Version info for these is fetched from the network rather than the OS repo.
 special_packages:

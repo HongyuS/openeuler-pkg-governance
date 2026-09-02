@@ -14,9 +14,28 @@ curated rules with *percentile* bands of reverse-dependency pressure.
 
 from __future__ import annotations
 
+import re
 from collections import deque
 
 from app.engine.rules_loader import rules
+
+_SONAME_RE = re.compile(r"^(?P<soname>.+?\.so[^()]*)(?:\([^()]*\))?(?P<arch>\(\d+bit\))?$")
+
+
+def _cap_key(cap: str) -> str:
+    """Normalise an rpm capability for graph matching.
+
+    Namespaced capabilities (``python3dist(x)``, ``npm(x)``, ``perl(x)``) are
+    kept intact: splitting at "(" would collapse a whole language ecosystem
+    into one fake super-node. SONAMEs drop the version tag but keep the arch
+    marker so ``libcrypto.so.3(OPENSSL_3.0.0)(64bit)`` satisfies
+    ``libcrypto.so.3()(64bit)``.
+    """
+    if ".so" in cap:
+        m = _SONAME_RE.match(cap)
+        if m:
+            return f"{m.group('soname')}(){m.group('arch') or ''}"
+    return cap
 
 
 def build_provide_map(inventory: dict[str, dict]) -> dict[str, set[str]]:
@@ -24,8 +43,7 @@ def build_provide_map(inventory: dict[str, dict]) -> dict[str, set[str]]:
     pmap: dict[str, set[str]] = {}
     for name, rec in inventory.items():
         for prov in rec.get("provides", []):
-            key = prov.split("(")[0]
-            pmap.setdefault(key, set()).add(name)
+            pmap.setdefault(_cap_key(prov), set()).add(name)
     return pmap
 
 
@@ -34,11 +52,17 @@ def build_require_graph(inventory: dict[str, dict], provide_map: dict[str, set[s
     reverse: dict[str, set[str]] = {}
     for name, rec in inventory.items():
         for req in rec.get("requires", []):
-            key = req.split("(")[0]
-            for src in provide_map.get(key, ()):
+            for src in provide_map.get(_cap_key(req), ()):
                 if src != name:
                     reverse.setdefault(src, set()).add(name)
     return reverse
+
+
+def _is_python_edge(key: str) -> bool:
+    """Only follow Python-namespaced capabilities, otherwise the closure BFS
+    spills into half the distro via real but irrelevant edges
+    (python3 -> libm -> glibc -> kernel -> llvm -> numpy; bash -> info -> texlive -> R)."""
+    return key.startswith(("python", "/usr/bin/python", "/usr/lib/python"))
 
 
 def python_closure(inventory: dict[str, dict], provide_map: dict[str, set[str]] | None = None) -> set[str]:
@@ -55,7 +79,10 @@ def python_closure(inventory: dict[str, dict], provide_map: dict[str, set[str]] 
             continue
         closure.add(name)
         for req in inventory[name].get("requires", []):
-            for src in provide_map.get(req.split("(")[0], ()):
+            key = _cap_key(req)
+            if not _is_python_edge(key):
+                continue
+            for src in provide_map.get(key, ()):
                 if src not in closure:
                     queue.append(src)
     return closure
