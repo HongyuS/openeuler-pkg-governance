@@ -7,14 +7,9 @@ const pRank: Record<PLvl, number> = { P0: 3, P1: 2, P2: 1 };
 
 type SortKey = "score" | "name" | "p_level" | "grade" | "last_commit";
 
-function esc(s: string) {
-  return String(s ?? "").replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-}
-
 /** 显示时去掉 RPM epoch 前缀（0:），完整版本放在 title 提示里 */
 function ver(v: string | undefined) {
-  return esc((v || "—").replace(/^0:/, ""));
+  return (v || "—").replace(/^0:/, "");
 }
 
 function prioCls(s: number) {
@@ -159,8 +154,8 @@ export function PackageTable(props: {
             {slice.map((r) => (
               <tr key={r.name} onClick={() => props.onOpen(r.name)}>
                 <td className="pkg-cell">
-                  <strong className="pkg-name" title={r.name}>{esc(r.name)}</strong>
-                  <div className="pkg-summary" title={r.summary}>{esc(r.summary)}</div>
+                  <strong className="pkg-name" title={r.name}>{r.name}</strong>
+                  <div className="pkg-summary" title={r.summary}>{r.summary}</div>
                   <RepoTag row={r} />
                 </td>
                 <td className="center"><span className={`badge b-${r.p_level}`}>{r.p_level}</span></td>
@@ -176,7 +171,7 @@ export function PackageTable(props: {
                 <td className="mono ver" title={r.versions.ubuntu_interim || ""}>{ver(r.versions.ubuntu_interim)}</td>
                 <td className="center">{r.lagging ? <span className="flag lag">滞后</span> : <span className="flag good">同步</span>}</td>
                 <td className="center">{dispBadge(r.disposal)}</td>
-                <td className="mono">{esc((r.last_commit || "—").slice(0, 10))}</td>
+                <td className="mono">{(r.last_commit || "—").slice(0, 10)}</td>
               </tr>
             ))}
           </tbody>

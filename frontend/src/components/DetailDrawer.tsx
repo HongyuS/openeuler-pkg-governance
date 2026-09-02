@@ -2,11 +2,6 @@ import { useEffect, useRef } from "react";
 import * as echarts from "echarts";
 import type { PackageDetail } from "../types";
 
-function esc(s: string) {
-  return String(s ?? "").replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-}
-
 export function DetailDrawer(props: { detail: PackageDetail | null; loading: boolean; onClose: () => void }) {
   const trendRef = useRef<HTMLDivElement | null>(null);
   const series = props.detail ? props.detail.activity.monthly || {} : {};
@@ -64,8 +59,8 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
       <div className="mask" onClick={props.onClose} />
       <aside className="drawer">
       <div className="close" onClick={props.onClose}>✕</div>
-      <h2>{esc(d.name)}</h2>
-      <div className="sub">{esc(d.summary || "—")}</div>
+      <h2>{d.name}</h2>
+      <div className="sub">{d.summary || "—"}</div>
       <div>
         <span className={`badge b-${g.p_level}`}>{g.p_level}</span>{" "}
         <span className={`badge b-${g.importance}`}>{g.importance}</span>{" "}
@@ -82,17 +77,17 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
         <h4>版本对比</h4>
         <table>
           {d.comparison.baselines.map((r) => (
-            <tr key={r.stream}><td style={{ color: "#94a3b8" }}>{r.stream}</td><td className="mono">{esc(r.version || "—")}</td></tr>
+            <tr key={r.stream}><td style={{ color: "#94a3b8" }}>{r.stream}</td><td className="mono">{r.version || "—"}</td></tr>
           ))}
         </table>
       </div>
       {d.comparison.lag_notes.length ? (
-        <div className="box"><h4>版本滞后说明</h4><ul>{d.comparison.lag_notes.map((n, i) => <li key={i}>{esc(n)}</li>)}</ul></div>
+        <div className="box"><h4>版本滞后说明</h4><ul>{d.comparison.lag_notes.map((n, i) => <li key={i}>{n}</li>)}</ul></div>
       ) : null}
       <div className="box">
         <h4>仓库可用性</h4>
         <div className="muted">
-          版本来源：{esc(d.latest_repo || "—")}
+          版本来源：{d.latest_repo || "—"}
           {d.has_source ? " · 源码(source)" : ""}
           {d.has_debug ? " · 调试(debuginfo)" : ""}
           {d.in_epol ? " · EPOL" : ""}
@@ -103,10 +98,10 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
         <div className="box">
           <h4>Python / pip 包</h4>
           <div className="muted">
-            PyPI 上游：{esc(d.python.pypi_name)}（最新 {esc(d.python.pypi_latest || "—")}）
+            PyPI 上游：{d.python.pypi_name}（最新 {d.python.pypi_latest || "—"}）
             <br />
-            Requires-Python：{esc(d.python.pypi_requires_python || "不限")}
-            {" · "}系统 Python：{esc(d.python.system_python || "—")}
+            Requires-Python：{d.python.pypi_requires_python || "不限"}
+            {" · "}系统 Python：{d.python.system_python || "—"}
             {" · "}
             {d.python.pypi_stale
               ? <span className="flag sunset">PyPI 停更 &gt;2 年</span>
@@ -117,22 +112,22 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
               : <span className="flag lag">Python 版本屏障</span>}
           </div>
           {d.python.notes?.length ? (
-            <ul>{(d.python.notes as string[]).map((n, i) => <li key={i}>{esc(n)}</li>)}</ul>
+            <ul>{(d.python.notes as string[]).map((n, i) => <li key={i}>{n}</li>)}</ul>
           ) : null}
         </div>
       ) : null}
       <div className="box">
         <h4>治理建议</h4>
         <div>建议：{d.comparison.lagging ? <span className="flag lag">需升级</span> : <span className="flag good">同步</span>} {dispBadge(g.disposal)}</div>
-        <ul>{g.maintenance_notes.length ? g.maintenance_notes.map((n, i) => <li key={i}>{esc(n)}</li>) : <li>无特别提示</li>}</ul>
+        <ul>{g.maintenance_notes.length ? g.maintenance_notes.map((n, i) => <li key={i}>{n}</li>) : <li>无特别提示</li>}</ul>
       </div>
       <div className="box">
         <h4>关键依赖包（反向依赖 Top）</h4>
-        <div className="muted">{g.dependents.slice(0, 14).map(esc).join(", ") || "无"}</div>
+        <div className="muted">{g.dependents.slice(0, 14).join(", ") || "无"}</div>
       </div>
       <div ref={trendRef} id="trend" />
       <p className="muted" style={{ fontSize: 11 }}>
-        活跃度来源：{d.activity.source === "measured" ? "GitCode 实测" : "待采集"} · 最后提交 {esc(d.activity.last_commit || "—")}
+        活跃度来源：{d.activity.source === "measured" ? "GitCode 实测" : "待采集"} · 最后提交 {d.activity.last_commit || "—"}
       </p>
       </aside>
     </>
