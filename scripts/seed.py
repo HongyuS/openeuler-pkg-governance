@@ -84,13 +84,35 @@ def main() -> None:
     }
     packages = pipeline.build_packages(inventory, ubuntu, activity, special=special)
 
-    streams = {
-        "openEuler_LTS": "openEuler-24.03-LTS-SP4",
-        "openEuler_innovation": "openEuler-26.09-DevStation",
-    }
+    # Offline stand-in with the same shape build.py emits: streams is a list of
+    # StreamDef dicts and `default` picks the selectable pair (the digest UI
+    # filters meta.streams as an array).
+    lts_id, innov_id = "openEuler-24.03-LTS-SP4", "openEuler-26.09-DevStation"
     meta = {
-        "streams": streams,
+        "streams": [
+            {
+                "id": lts_id,
+                "label": "openEuler 24.03 LTS SP4",
+                "kind": "LTS",
+                "source": "seed",
+                "date": "",
+                "rc": False,
+                "release": lts_id,
+            },
+            {
+                "id": innov_id,
+                "label": "openEuler 26.09 DevStation",
+                "kind": "innovation",
+                "source": "seed",
+                "date": "",
+                "rc": False,
+                "release": innov_id,
+            },
+        ],
+        "default": {"openEuler_LTS": lts_id, "openEuler_innovation": innov_id},
         "baselines": {"ubuntu_LTS": "resolute", "ubuntu_interim": "stonking"},
+        "ubuntu_lts": ubuntu.get("ubuntu_LTS", {}),
+        "ubuntu_interim": ubuntu.get("ubuntu_interim", {}),
         "data_date": iso_today(),
         "activity_measured": len([p for p in packages if p.activity.source == "measured"]),
         "total_sources": len(packages),
