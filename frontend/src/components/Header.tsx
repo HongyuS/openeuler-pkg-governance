@@ -1,4 +1,5 @@
 import type { StreamDef } from "../types";
+import { OSelect } from "./OSelect";
 
 export function OEHeader(props: {
   ltsStreams: StreamDef[];
@@ -8,6 +9,7 @@ export function OEHeader(props: {
   onLts: (v: string) => void;
   onInnov: (v: string) => void;
   onRefresh: () => void;
+  onDocs: () => void;
   loading: boolean;
 }) {
   return (
@@ -17,31 +19,13 @@ export function OEHeader(props: {
           <img className="oe-logo" src="/oe-logo.svg" alt="openEuler 包分级治理" />
         </a>
         <nav className="oe-nav">
-          <a className="active" href="/">治理面板</a>
-          <a href="/docs.html">文档</a>
+          <button className="active" type="button">治理面板</button>
+          <button type="button" onClick={props.onDocs}>文档</button>
         </nav>
         <div className="oe-header-right">
           <div className="stream-picker">
-            <div className="stream-select">
-              <label>LTS 版本</label>
-              <select value={props.lts} onChange={(e) => props.onLts(e.target.value)}>
-                <option value="">选择…</option>
-                {props.ltsStreams.map((s) => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="stream-select">
-              <label>创新版本</label>
-              <select value={props.innov} onChange={(e) => props.onInnov(e.target.value)}>
-                <option value="">选择…</option>
-                {props.innovStreams.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <OSelect label="LTS 版本" value={props.lts} options={props.ltsStreams} onChange={props.onLts} />
+            <OSelect label="创新版本" value={props.innov} options={props.innovStreams} onChange={props.onInnov} />
           </div>
           <button className="btn" onClick={props.onRefresh} disabled={props.loading}>
             {props.loading ? "加载中…" : "刷新数据"}

@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 import type { Grade, PackageRow, PLvl } from "../types";
+import { OSelect } from "./OSelect";
 
 const gradeRank: Record<Grade, number> = { A: 4, B: 3, C: 2, D: 1, "N/A": 0 };
 const pRank: Record<PLvl, number> = { P0: 3, P1: 2, P2: 1 };
@@ -112,15 +113,12 @@ export function PackageTable(props: {
           <input type="search" placeholder="搜索包名 / 摘要…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
           {q ? <button className="clear" title="清除" onClick={() => { setQ(""); setPage(1); }}>✕</button> : null}
         </span>
-        <select value={p} onChange={(e) => { setP(e.target.value); setPage(1); }}>
-          <option value="">分级（全部）</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option>
-        </select>
-        <select value={grade} onChange={(e) => { setGrade(e.target.value); setPage(1); }}>
-          <option value="">活跃度（全部）</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="N/A">N/A</option>
-        </select>
-        <select value={disposal} onChange={(e) => { setDisposal(e.target.value); setPage(1); }}>
-          <option value="">建议（全部）</option><option value="upgrade">升级</option><option value="maintain">维持</option><option value="sunset">日落</option>
-        </select>
+        <OSelect value={p} minWidth={124} onChange={(v) => { setP(v); setPage(1); }}
+          options={[{ id: "", label: "分级（全部）" }, { id: "P0", label: "P0" }, { id: "P1", label: "P1" }, { id: "P2", label: "P2" }]} />
+        <OSelect value={grade} minWidth={136} onChange={(v) => { setGrade(v); setPage(1); }}
+          options={[{ id: "", label: "活跃度（全部）" }, { id: "A", label: "A" }, { id: "B", label: "B" }, { id: "C", label: "C" }, { id: "D", label: "D" }, { id: "N/A", label: "N/A" }]} />
+        <OSelect value={disposal} minWidth={124} onChange={(v) => { setDisposal(v); setPage(1); }}
+          options={[{ id: "", label: "建议（全部）" }, { id: "upgrade", label: "升级" }, { id: "maintain", label: "维持" }, { id: "sunset", label: "日落" }]} />
         <label className="ck"><input type="checkbox" checked={lag} onChange={(e) => { setLag(e.target.checked); setPage(1); }} /> 基线滞后</label>
         <label className="ck"><input type="checkbox" checked={sunset} onChange={(e) => { setSunset(e.target.checked); setPage(1); }} /> 日落候选</label>
         <label className="ck"><input type="checkbox" checked={measured} onChange={(e) => { setMeasured(e.target.checked); setPage(1); }} /> 已测活跃度</label>
@@ -190,9 +188,8 @@ export function PackageTable(props: {
         <span className="total">共 {filtered.length.toLocaleString()} 条</span>
         <div className="pager">
           <span className="size-select">
-            <select value={per} onChange={(e) => { setPer(+e.target.value); goPage(1); }}>
-              <option>25</option><option>50</option><option>100</option><option>200</option>
-            </select>
+            <OSelect value={String(per)} minWidth={76} onChange={(v) => { setPer(+v); goPage(1); }}
+              options={["25", "50", "100", "200"].map((n) => ({ id: n, label: n }))} />
             条/页
           </span>
           <button className="page pg-nav" disabled={cur <= 1} onClick={() => goPage(cur - 1)}>‹ 上一页</button>

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { fetchPackage } from "./api";
 import { Charts } from "./components/Charts";
 import { DetailDrawer } from "./components/DetailDrawer";
+import { DocsModal } from "./components/DocsModal";
 import { OEHeader } from "./components/Header";
 import { PackageTable } from "./components/PackageTable";
 import { SummaryCards } from "./components/SummaryCards";
@@ -12,6 +13,7 @@ export default function App() {
   const d = useDashboard();
   const [detail, setDetail] = useState<PackageDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
 
   const openDetail = useCallback(async (name: string) => {
     setDetail(null);
@@ -42,6 +44,7 @@ export default function App() {
         onLts={d.setLts}
         onInnov={d.setInnov}
         onRefresh={d.refresh}
+        onDocs={() => setDocsOpen(true)}
         loading={d.loading}
       />
       <div className="banner">
@@ -71,10 +74,11 @@ export default function App() {
         ) : null}
 
         <DetailDrawer detail={detail} loading={detailLoading} onClose={() => setDetail(null)} />
+        {docsOpen ? <DocsModal onClose={() => setDocsOpen(false)} /> : null}
 
         <footer className="footer">
           数据来源：openEuler 稳定镜像 / 每日构建 · GitCode / AtomGit API · Ubuntu Linux archive ·{" "}
-          <a href="/docs.html" target="_blank">项目文档</a>
+          <a href="/docs.html" onClick={(e) => { e.preventDefault(); setDocsOpen(true); }}>项目文档</a>
         </footer>
       </main>
     </>
