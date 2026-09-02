@@ -8,7 +8,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-PROJECT_ROOT = Path(__file__).resolve().parents[2]          # pkg-governance/
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # pkg-governance/
 BACKEND_DIR = PROJECT_ROOT / "backend"
 DATA_DIR = BACKEND_DIR / "data"
 RULES_DIR = DATA_DIR / "rules"

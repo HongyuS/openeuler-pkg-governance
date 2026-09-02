@@ -20,7 +20,7 @@ sys.path.insert(0, str(BACKEND))
 from app import config  # noqa: E402
 from app.engine import pipeline  # noqa: E402
 from app.models import RepoSignals  # noqa: E402
-from app.utils import iso_today, LOG, setup_logging  # noqa: E402
+from app.utils import LOG, iso_today, setup_logging  # noqa: E402
 
 setup_logging()
 
@@ -36,7 +36,6 @@ def _load(path: Path, default):
 
 def _synthetic_inventory() -> dict[str, dict]:
     """A small, realistic stand-in inventory (used only if real caches are absent)."""
-    rules = __import__("app").engine.rules_loader.rules()
     inv: dict[str, dict] = {}
     base = [
         ("kernel", "0:6.18.40", "The Linux kernel", "GPL-2.0", (0,)),
@@ -54,8 +53,11 @@ def _synthetic_inventory() -> dict[str, dict]:
     for name, ver, summary, lic, rd in base:
         inv[name] = {
             "name": name,
-            "versions": {"openEuler_LTS": ver, "openEuler_innovation": ver,
-                         "openEuler_26.09-DevStation": ver},
+            "versions": {
+                "openEuler_LTS": ver,
+                "openEuler_innovation": ver,
+                "openEuler_26.09-DevStation": ver,
+            },
             "arches": ["x86_64"],
             "summary": summary,
             "license": lic,
@@ -72,17 +74,20 @@ def main() -> None:
         inventory = _synthetic_inventory()
     ubuntu = _load(config.UBUNTU_CACHE, {}).get("versions", None)
     if not ubuntu:
-        ubuntu = {
-            "ubuntu_LTS": {n: v for n, v in {}.items()},
-            "ubuntu_interim": {},
-        }
+        ubuntu = {"ubuntu_LTS": {}, "ubuntu_interim": {}}
     activity_raw = _load(config.CACHE_DIR / "activity.json", {})
     activity = {k: RepoSignals(**v) for k, v in activity_raw.items() if isinstance(v, dict)}
 
-    special = {s["name"]: s["note"] for s in __import__("app").engine.rules_loader.rules().get("special_packages", [])}
+    special = {
+        s["name"]: s["note"]
+        for s in __import__("app").engine.rules_loader.rules().get("special_packages", [])
+    }
     packages = pipeline.build_packages(inventory, ubuntu, activity, special=special)
 
-    streams = {"openEuler_LTS": "openEuler-24.03-LTS-SP4", "openEuler_innovation": "openEuler-26.09-DevStation"}
+    streams = {
+        "openEuler_LTS": "openEuler-24.03-LTS-SP4",
+        "openEuler_innovation": "openEuler-26.09-DevStation",
+    }
     meta = {
         "streams": streams,
         "baselines": {"ubuntu_LTS": "resolute", "ubuntu_interim": "stonking"},
@@ -93,7 +98,11 @@ def main() -> None:
     }
     config.PACKAGES_CACHE.parent.mkdir(parents=True, exist_ok=True)
     config.PACKAGES_CACHE.write_text(
-        json.dumps({"meta": meta, "packages": [p.to_dict() for p in packages]}, ensure_ascii=False, indent=2)
+        json.dumps(
+            {"meta": meta, "packages": [p.to_dict() for p in packages]},
+            ensure_ascii=False,
+            indent=2,
+        )
     )
     LOG.info("seed wrote %d packages -> %s", len(packages), config.PACKAGES_CACHE)
 

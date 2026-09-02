@@ -16,11 +16,8 @@ import re
 
 from app.collectors import pypi as pypi_collect
 from app.models import Package
-from app.utils import compare_upstream
 
-_RANG = re.compile(
-    r"(?P<op>>=|<=|==|!=|~=|>|<)?\s*(?P<ver>\d+(?:\.\d+){0,2}(?:\.\*)?)"
-)
+_RANG = re.compile(r"(?P<op>>=|<=|==|!=|~=|>|<)?\s*(?P<ver>\d+(?:\.\d+){0,2}(?:\.\*)?)")
 
 
 def _clean(ver: str) -> str:
@@ -47,14 +44,14 @@ def _pep440_satisfied(requires_python: str, current: str) -> bool:
         op = m.group("op") or "=="
         target = _num(m.group("ver").rstrip(".*"))
         ok = {
-            ">": cur > target, ">=": cur >= target,
-            "<": cur < target, "<=": cur <= target,
+            ">": cur > target,
+            ">=": cur >= target,
+            "<": cur < target,
+            "<=": cur <= target,
             "==": cur[: len(target)] == target,
             "!=": cur[: len(target)] != target,
             "~=": target <= cur < (target[0], target[1] + 1) if len(target) >= 2 else cur >= target,
         }.get(op, True)
-        if hasattr(ok, "__call__"):
-            ok = cur >= target
         if not ok:
             return False
     return True
@@ -86,21 +83,26 @@ def apply_python(
 
     prof = pypi_profiles.get(name, {}) or {}
     sys_major_minor = ".".join(str(v) for v in _num(sys_python)[:2]) if sys_python else ""
-    compat_ok = _pep440_satisfied(prof.get("pypi_requires_python", ""), sys_major_minor or sys_python)
+    compat_ok = _pep440_satisfied(
+        prof.get("pypi_requires_python", ""), sys_major_minor or sys_python
+    )
 
     note = []
     if prof.get("pypi_stale"):
         note.append(
-            f"PyPI 上游 [{prof.get('pypi_name','')}] 已超过 2 年未发布（最新 {prof.get('pypi_latest','')}，"
-            f"发布于 {prof.get('pypi_last_release','') or '—'}）。"
+            f"PyPI 上游 [{prof.get('pypi_name', '')}] 已超过 2 年未发布"
+            f"（最新 {prof.get('pypi_latest', '')}，"
+            f"发布于 {prof.get('pypi_last_release', '') or '—'}）。"
         )
     elif prof.get("pypi_latest"):
         note.append(
-            f"PyPI 上游最新 {prof.get('pypi_latest','')}（Requires-Python {prof.get('pypi_requires_python','') or '不限'}）。"
+            f"PyPI 上游最新 {prof.get('pypi_latest', '')}"
+            f"（Requires-Python {prof.get('pypi_requires_python', '') or '不限'}）。"
         )
     if prof.get("pypi_requires_python") and not compat_ok and sys_major_minor:
         note.append(
-            f"PyPI 新版本要求 Python {prof.get('pypi_requires_python','')}，当前系统 Python {sys_major_minor} 不满足："
+            f"PyPI 新版本要求 Python {prof.get('pypi_requires_python', '')}，"
+            f"当前系统 Python {sys_major_minor} 不满足："
             "存在 Python 版本兼容屏障，不能盲目升级。"
         )
 

@@ -22,7 +22,9 @@ from app import config
 from app.utils import LOG, http_get, json_or_none
 
 
-def collect_org_push(org: str = "src-openeuler", *, max_pages: int = 120, cache: Path | None = None) -> dict[str, str]:
+def collect_org_push(
+    org: str = "src-openeuler", *, max_pages: int = 120, cache: Path | None = None
+) -> dict[str, str]:
     """Return {repo_name: pushed_at} for a GitCode org (paginated, cached)."""
     cache = cache or (config.CACHE_DIR / f"repo_push_{org}.json")
     result: dict[str, str] = {}
@@ -36,11 +38,13 @@ def collect_org_push(org: str = "src-openeuler", *, max_pages: int = 120, cache:
         return result
     page = 1
     while page <= max_pages:
-        data = json_or_none(http_get(
-            f"{config.ACTIVITY_API_BASE}/orgs/{org}/repos",
-            params={"per_page": 100, "page": page},
-            timeout=25,
-        ))
+        data = json_or_none(
+            http_get(
+                f"{config.ACTIVITY_API_BASE}/orgs/{org}/repos",
+                params={"per_page": 100, "page": page},
+                timeout=25,
+            )
+        )
         if not isinstance(data, list) or not data:
             break
         for r in data:

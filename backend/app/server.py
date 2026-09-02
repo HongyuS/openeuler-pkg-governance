@@ -8,12 +8,11 @@ payload for the interactive single-page dashboard, and mounts the static SPA.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import config
@@ -58,7 +57,9 @@ def _load_cache(force: bool = False) -> None:
         LOG.warning("could not load %s: %s", path, exc)
     if config.STREAM_VERSIONS_CACHE.exists():
         try:
-            STATE["stream_versions"] = json.loads(config.STREAM_VERSIONS_CACHE.read_text(encoding="utf-8"))
+            STATE["stream_versions"] = json.loads(
+                config.STREAM_VERSIONS_CACHE.read_text(encoding="utf-8")
+            )
         except Exception as exc:  # noqa: BLE001
             LOG.warning("could not load stream versions: %s", exc)
 
@@ -97,7 +98,7 @@ def _apply_stream(p: dict, lts: str, innov: str) -> dict[str, Any]:
     """Recompute the openEuler version columns, lag and repo tags for a
     selected stream pair. Tags follow the LTS stream, falling back to the
     innovation stream, then to the build-time snapshot in packages.json."""
-    name = p.get("name")
+    name = str(p.get("name") or "")
     lts_rec = _sv_rec(lts, name)
     innov_rec = _sv_rec(innov, name)
     oe = {
@@ -116,8 +117,11 @@ def _apply_stream(p: dict, lts: str, innov: str) -> dict[str, Any]:
         **{
             k: sv_rec.get(k, p.get(k, default))
             for k, default in (
-                ("in_epol", False), ("in_update", False), ("latest_repo", ""),
-                ("has_source", False), ("has_debug", False),
+                ("in_epol", False),
+                ("in_update", False),
+                ("latest_repo", ""),
+                ("has_source", False),
+                ("has_debug", False),
             )
         },
     }
@@ -136,14 +140,16 @@ def _summary(lts: str | None = None, innov: str | None = None) -> dict[str, Any]
         "outdated": sum(1 for r in rows if r["lagging"]),
         "sunset_candidate": sum(1 for p in pkgs if p.get("governance", {}).get("sunset_candidate")),
         "unmaintained_risk": sum(
-            1 for p in pkgs if "长期未更新" in " ".join(p.get("governance", {}).get("maintenance_notes", []))
+            1
+            for p in pkgs
+            if "长期未更新" in " ".join(p.get("governance", {}).get("maintenance_notes", []))
         ),
         "special": sum(1 for p in pkgs if p.get("special")),
     }
     effort_pd = round(sum(p.get("governance", {}).get("effort_person_days", 0) for p in pkgs), 1)
     effort_py = round(sum(p.get("governance", {}).get("effort_person_years", 0) for p in pkgs), 3)
     effort_note = _effort_note(effort_py)
-    _lag_map = {p.get("name"): r for p, r in zip(pkgs, rows)}
+    _lag_map = {p.get("name"): r for p, r in zip(pkgs, rows, strict=False)}
     top_lagging = sorted(
         (p for p in pkgs if _lag_map.get(p.get("name"), {}).get("lagging")),
         key=lambda p: p.get("governance", {}).get("score", 0),
@@ -232,16 +238,24 @@ def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
     rows = [_apply_stream(p, lts, innov) for p in pkgs]
     return {
         "meta": STATE["meta"],
-        "summary": {"distributions": {k: v for k, v in {
-            "total": len(pkgs),
-            "p_level": _count(pkgs, "p_level"),
-            "importance": _count(pkgs, "importance"),
-            "activity_grade": _count(pkgs, "activity_grade"),
-            "disposal": _count(pkgs, "disposal"),
-            "outdated": sum(1 for r in rows if r["lagging"]),
-            "sunset_candidate": sum(1 for p in pkgs if p.get("governance", {}).get("sunset_candidate")),
-            "special": sum(1 for p in pkgs if p.get("special")),
-        }.items()}, "selected": {"openEuler_LTS": lts, "openEuler_innovation": innov}},
+        "summary": {
+            "distributions": {
+                k: v
+                for k, v in {
+                    "total": len(pkgs),
+                    "p_level": _count(pkgs, "p_level"),
+                    "importance": _count(pkgs, "importance"),
+                    "activity_grade": _count(pkgs, "activity_grade"),
+                    "disposal": _count(pkgs, "disposal"),
+                    "outdated": sum(1 for r in rows if r["lagging"]),
+                    "sunset_candidate": sum(
+                        1 for p in pkgs if p.get("governance", {}).get("sunset_candidate")
+                    ),
+                    "special": sum(1 for p in pkgs if p.get("special")),
+                }.items()
+            },
+            "selected": {"openEuler_LTS": lts, "openEuler_innovation": innov},
+        },
         "packages": [
             {
                 "name": p.get("name"),
@@ -266,7 +280,14 @@ def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
                 "latest_repo": r["latest_repo"],
                 "python": {
                     k: p.get("python", {}).get(k, "")
-                    for k in ("kind", "pypi_name", "pypi_latest", "pypi_stale", "compat_ok", "system_python")
+                    for k in (
+                        "kind",
+                        "pypi_name",
+                        "pypi_latest",
+                        "pypi_stale",
+                        "compat_ok",
+                        "system_python",
+                    )
                 },
                 "npm": {
                     k: p.get("npm", {}).get(k, "")
@@ -274,9 +295,12 @@ def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
                 },
                 "versions": r["versions"],
                 "last_commit": p.get("activity", {}).get("last_commit", ""),
-                "open_backlog": (p.get("activity", {}).get("open_issues", 0) + p.get("activity", {}).get("open_prs", 0)),
+                "open_backlog": (
+                    p.get("activity", {}).get("open_issues", 0)
+                    + p.get("activity", {}).get("open_prs", 0)
+                ),
             }
-            for p, r in zip(pkgs, rows)
+            for p, r in zip(pkgs, rows, strict=False)
         ],
     }
 
@@ -335,7 +359,8 @@ def get_package(name: str, lts: str = Query(""), innov: str = Query("")) -> dict
             for k in ("has_source", "has_debug", "in_epol", "in_update", "latest_repo"):
                 out[k] = row[k]
             out["open_euler"] = {
-                key: value for key, value in {
+                key: value
+                for key, value in {
                     "openEuler_LTS": row["versions"].get("openEuler_LTS", ""),
                     "openEuler_innovation": row["versions"].get("openEuler_innovation", ""),
                 }.items()

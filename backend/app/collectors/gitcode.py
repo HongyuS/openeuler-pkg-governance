@@ -170,7 +170,7 @@ def collect_many(
     *,
     limit: int = 0,
     cache: Path | None = None,
-    resolve: "Callable[[str], str | None] | None" = None,
+    resolve: Callable[[str], str | None] | None = None,
 ) -> dict[str, RepoSignals]:
     """Collect activity for many packages with bounded concurrency + cache.
 
@@ -226,8 +226,5 @@ def collect_many(
 
 def _write_cache(cache: Path, data: dict) -> None:
     cache.parent.mkdir(parents=True, exist_ok=True)
-    serialisable = {
-        k: {kk: vv for kk, vv in v.__dict__.items()}
-        for k, v in data.items()
-    }
+    serialisable = {k: {kk: vv for kk, vv in v.__dict__.items()} for k, v in data.items()}
     cache.write_text(json.dumps(serialisable, ensure_ascii=False, indent=2))

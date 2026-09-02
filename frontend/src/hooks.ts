@@ -82,7 +82,6 @@ export function useEChart(option: echarts.EChartsOption, deps: unknown[] = []) {
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const lastOption = useRef(option);

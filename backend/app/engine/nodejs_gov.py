@@ -8,7 +8,6 @@ what the system repo must actively maintain.
 
 from __future__ import annotations
 
-from app.collectors import npm as npm_collect
 from app.engine.rules_loader import rules
 from app.models import Package
 
@@ -28,7 +27,9 @@ def _fmt(names: list[str]) -> str:
     return shown + ("…" if len(names) > 5 else "")
 
 
-def apply_nodejs(pkg: Package, system_set: set[str], npm_profiles: dict[str, dict] | None = None) -> Package:
+def apply_nodejs(
+    pkg: Package, system_set: set[str], npm_profiles: dict[str, dict] | None = None
+) -> Package:
     """Apply the npm-module disposal policy to a package."""
     name = pkg.name
     gov = pkg.governance
@@ -47,15 +48,17 @@ def apply_nodejs(pkg: Package, system_set: set[str], npm_profiles: dict[str, dic
     note = []
     if prof.get("npm_deprecated"):
         note.append(
-            f"npm 上游 [{prof.get('npm_name','')}] 已被官方标记 deprecated（最新 {prof.get('npm_latest','')}）。"
+            f"npm 上游 [{prof.get('npm_name', '')}] 已被官方标记 deprecated"
+            f"（最新 {prof.get('npm_latest', '')}）。"
         )
     if prof.get("npm_stale"):
         note.append(
-            f"npm 上游 [{prof.get('npm_name','')}] 已超过 2 年未发布（最新 {prof.get('npm_latest','')}，"
-            f"发布于 {prof.get('npm_last_release','') or '—'}）。"
+            f"npm 上游 [{prof.get('npm_name', '')}] 已超过 2 年未发布"
+            f"（最新 {prof.get('npm_latest', '')}，"
+            f"发布于 {prof.get('npm_last_release', '') or '—'}）。"
         )
     elif prof.get("npm_latest"):
-        note.append(f"npm 上游最新 {prof.get('npm_latest','')}。")
+        note.append(f"npm 上游最新 {prof.get('npm_latest', '')}。")
     pkg.npm = {
         "kind": "npm_module",
         "npm_name": prof.get("npm_name", name),

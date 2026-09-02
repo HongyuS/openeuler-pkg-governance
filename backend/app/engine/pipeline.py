@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from app import config
 from app.engine import compare, disposal, effort, grading, importance, nodejs_gov, python_gov
-from app.engine.rules_loader import rules
 from app.models import Governance, Package, RepoSignals
-from app.utils import LOG, iso_today
+from app.utils import iso_today
 
 
 def _priority_score(gov: Governance, lagging: bool) -> float:

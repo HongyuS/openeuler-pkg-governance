@@ -8,9 +8,9 @@ baseline carries a strictly newer upstream version.
 
 from __future__ import annotations
 
-from app.models import Comparison, VersionRow
 from app.engine.rules_loader import rules
-from app.utils import LOG, compare_upstream
+from app.models import Comparison, VersionRow
+from app.utils import compare_upstream
 
 
 def _row(distro: str, stream: str, version: str, *, date: str = "", source: str = "") -> VersionRow:
@@ -77,7 +77,9 @@ def _compute_lag(comp: Comparison) -> Comparison:
     oe_rows = [r for r in present if r.distro == "openEuler"]
     external = [r for r in present if r.distro not in ("openEuler", "upstream")]
 
-    oe_best = max(oe_rows, key=lambda r: compare_upstream(r.version, r.version) or 0) if oe_rows else None
+    oe_best = (
+        max(oe_rows, key=lambda r: compare_upstream(r.version, r.version) or 0) if oe_rows else None
+    )
     if oe_rows:
         oe_best = oe_rows[0]
         for r in oe_rows[1:]:
@@ -104,6 +106,8 @@ def _compute_lag(comp: Comparison) -> Comparison:
     if ubuntu_lts and oe_lts:
         comp.lag_behind_ubuntu_lts = compare_upstream(ubuntu_lts.version, oe_lts.version) > 0
     if ubuntu_interim and oe_best:
-        comp.lag_behind_ubuntu_interim = compare_upstream(ubuntu_interim.version, oe_best.version) > 0
+        comp.lag_behind_ubuntu_interim = (
+            compare_upstream(ubuntu_interim.version, oe_best.version) > 0
+        )
 
     return comp

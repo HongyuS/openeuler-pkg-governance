@@ -1,4 +1,3 @@
-import * as echarts from "echarts";
 import type { ReactNode } from "react";
 import { useEChart } from "../hooks";
 import type { PackageRow, SummaryDist } from "../types";

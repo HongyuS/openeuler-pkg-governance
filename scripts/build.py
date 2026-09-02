@@ -23,6 +23,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
@@ -41,7 +42,11 @@ def pick_activity_targets(inventory: dict[str, dict], limit: int) -> list[str]:
     """Priority-ordered activity targets: P0/P1/special packages first, then
     everything else, so an interrupted run still covers the important repos."""
     rules = __import__("app").engine.rules_loader.rules()
-    p0 = {p for p in set(rules.get("P0_critical", [])) | set(rules.get("python_closure_seeds", [])) if p in inventory}
+    p0 = {
+        p
+        for p in set(rules.get("P0_critical", [])) | set(rules.get("python_closure_seeds", []))
+        if p in inventory
+    }
     p1 = {p for p in rules.get("P1_base", []) if p in inventory}
     special = {s["name"] for s in rules.get("special_packages", []) if s.get("name") in inventory}
     selected: list[str] = []
@@ -69,7 +74,7 @@ def main() -> None:
     LOG.info("default pair: %s", default)
 
     # 1) Per-stream version matrix.
-    stream_versions: dict[str, dict[str, str]] = {}
+    stream_versions: dict[str, dict[str, dict]] = {}
     sv_cache = config.STREAM_VERSIONS_CACHE
     if sv_cache.exists():
         try:
@@ -102,8 +107,12 @@ def main() -> None:
     ub_versions = ubuntu_data["versions"]
     # Slim ubuntu maps to only packages present in the openEuler inventory.
     slim = {
-        "ubuntu_LTS": {k: v for k, v in ub_versions.get("ubuntu_LTS", {}).items() if k in inventory},
-        "ubuntu_interim": {k: v for k, v in ub_versions.get("ubuntu_interim", {}).items() if k in inventory},
+        "ubuntu_LTS": {
+            k: v for k, v in ub_versions.get("ubuntu_LTS", {}).items() if k in inventory
+        },
+        "ubuntu_interim": {
+            k: v for k, v in ub_versions.get("ubuntu_interim", {}).items() if k in inventory
+        },
     }
 
     # 4) Activity (full scan by default; cache makes reruns incremental).
@@ -130,14 +139,25 @@ def main() -> None:
         LOG.info("fetching npm profiles for %d npm modules…", len(npm_mods))
         npm_profiles = npm.collect(npm_mods, cache=config.CACHE_DIR / "npm.json")
     packages = pipeline.build_packages(
-        inventory, ub_versions, activity, special=special,
-        pypi_profiles=pypi_profiles, npm_profiles=npm_profiles,
+        inventory,
+        ub_versions,
+        activity,
+        special=special,
+        pypi_profiles=pypi_profiles,
+        npm_profiles=npm_profiles,
     )
 
-    meta = {
+    meta: dict[str, Any] = {
         "streams": [
-            {"id": s["id"], "label": s["label"], "kind": s["kind"], "source": s["source"],
-             "date": s.get("date", ""), "rc": s.get("rc", False), "release": s.get("release", "")}
+            {
+                "id": s["id"],
+                "label": s["label"],
+                "kind": s["kind"],
+                "source": s["source"],
+                "date": s.get("date", ""),
+                "rc": s.get("rc", False),
+                "release": s.get("release", ""),
+            }
             for s in catalog
         ],
         "default": default,
@@ -151,8 +171,18 @@ def main() -> None:
     }
     _write(config.PACKAGES_CACHE, {"meta": meta, "packages": [p.to_dict() for p in packages]})
     LOG.info("WROTE %s", config.PACKAGES_CACHE)
-    print(json.dumps({"streams": len(meta["streams"]), "default": default, "total": len(packages),
-                      "activity_measured": meta["activity_measured"]}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                "streams": len(meta["streams"]),
+                "default": default,
+                "total": len(packages),
+                "activity_measured": meta["activity_measured"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def _write(path: Path, data) -> None:

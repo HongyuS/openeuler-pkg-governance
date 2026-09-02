@@ -45,9 +45,7 @@ def recommend(
         )
     elif grade == "D":
         gov.disposal = "maintain"
-        gov.maintenance_notes.append(
-            "D 级但仍有关键性/依赖：暂不日落，需维持并上报无人维护风险。"
-        )
+        gov.maintenance_notes.append("D 级但仍有关键性/依赖：暂不日落，需维持并上报无人维护风险。")
     else:
         gov.disposal = "upgrade"
 
@@ -62,8 +60,6 @@ def recommend(
                 "疑似长期未更新/无人维护。"
             )
         elif idle > 365:
-            gov.maintenance_notes.append(
-                f"超过 {idle} 天无提交，未更新风险高。"
-            )
+            gov.maintenance_notes.append(f"超过 {idle} 天无提交，未更新风险高。")
 
     return gov

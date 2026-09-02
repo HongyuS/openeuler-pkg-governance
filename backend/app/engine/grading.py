@@ -60,7 +60,7 @@ def _activity_index(monthly: dict[str, dict]) -> float:
         total_w = 0.0
         acc = 0.0
         for delta in range(months):  # delta=0 is the current month (most recent)
-            w = decay ** delta
+            w = decay**delta
             acc += w * by_month.get(month_start(delta), 0.0)
             total_w += w
         return acc / (total_w or 1.0)
@@ -68,8 +68,7 @@ def _activity_index(monthly: dict[str, dict]) -> float:
     # Cap each window at a reference "busy" volume so the index is bounded.
     ref_high = 8.0  # ~8 monthly activity units (commits/PRs) = fully healthy distro repo
     composite = sum(
-        float(w) * min(window_score(int(m)), ref_high) / ref_high
-        for m, w in windows.items()
+        float(w) * min(window_score(int(m)), ref_high) / ref_high for m, w in windows.items()
     )
     return min(1.0, max(0.0, composite))
 
@@ -90,7 +89,7 @@ def _fallback_index(signals: RepoSignals) -> float:
 def grade(signals: RepoSignals) -> tuple[str, float | None, dict]:
     """Return (letter_grade, index, scores)."""
     bands = rules().get("activity_grade_bands", {"A": 0.62, "B": 0.42, "C": 0.22, "D": 0.0})
-    scores: dict[str, float] = {}
+    scores: dict[str, object] = {}
 
     # Only fully measured sources get a grade; a bare last-push is displayed in
     # the table but must not be conflated with real activity health.
@@ -98,7 +97,9 @@ def grade(signals: RepoSignals) -> tuple[str, float | None, dict]:
         scores = {"index": None, "source": "estimated", "composite": None}
         return "N/A", None, scores
 
-    has_any_signal = bool(signals.monthly or signals.last_commit or signals.closed_prs or signals.closed_issues)
+    has_any_signal = bool(
+        signals.monthly or signals.last_commit or signals.closed_prs or signals.closed_issues
+    )
     if not has_any_signal:
         scores = {"index": None, "source": "estimated", "composite": None}
         return "N/A", None, scores

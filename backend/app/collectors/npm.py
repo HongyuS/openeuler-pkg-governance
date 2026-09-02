@@ -60,24 +60,34 @@ def fetch_profile(source: str) -> dict:
             except ValueError:
                 pass
         last_release = max(release_dates).isoformat() if release_dates else ""
-        days = (dt.date.today() - dt.date.fromisoformat(last_release)).days if last_release else None
+        days = (
+            (dt.date.today() - dt.date.fromisoformat(last_release)).days if last_release else None
+        )
         latest_meta = data.get("versions", {}).get(latest, {}) if latest else {}
-        results.append({
-            "npm_name": project,
-            "npm_latest": latest,
-            "npm_last_release": last_release,
-            "npm_days_since_release": days,
-            "npm_deprecated": bool(latest_meta.get("deprecated")),
-            "npm_stale": bool(days is not None and days > 730),
-            "npm_source": source,
-            "_releases": len(release_dates),
-        })
+        results.append(
+            {
+                "npm_name": project,
+                "npm_latest": latest,
+                "npm_last_release": last_release,
+                "npm_days_since_release": days,
+                "npm_deprecated": bool(latest_meta.get("deprecated")),
+                "npm_stale": bool(days is not None and days > 730),
+                "npm_source": source,
+                "_releases": len(release_dates),
+            }
+        )
     # Prefer the candidate that actually resolves to a real, released package.
     best = next((r for r in results if r["npm_latest"]), None) or (results[0] if results else None)
     if not best:
-        return {"npm_name": source, "npm_source": source, "npm_stale": False,
-                "npm_latest": "", "npm_last_release": "", "npm_days_since_release": None,
-                "npm_deprecated": False}
+        return {
+            "npm_name": source,
+            "npm_source": source,
+            "npm_stale": False,
+            "npm_latest": "",
+            "npm_last_release": "",
+            "npm_days_since_release": None,
+            "npm_deprecated": False,
+        }
     best.pop("_releases", None)
     return best
 

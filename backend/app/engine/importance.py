@@ -47,7 +47,9 @@ def build_provide_map(inventory: dict[str, dict]) -> dict[str, set[str]]:
     return pmap
 
 
-def build_require_graph(inventory: dict[str, dict], provide_map: dict[str, set[str]]) -> dict[str, set[str]]:
+def build_require_graph(
+    inventory: dict[str, dict], provide_map: dict[str, set[str]]
+) -> dict[str, set[str]]:
     """Build the package -> {dependent sources} reverse graph."""
     reverse: dict[str, set[str]] = {}
     for name, rec in inventory.items():
@@ -65,7 +67,9 @@ def _is_python_edge(key: str) -> bool:
     return key.startswith(("python", "/usr/bin/python", "/usr/lib/python"))
 
 
-def python_closure(inventory: dict[str, dict], provide_map: dict[str, set[str]] | None = None) -> set[str]:
+def python_closure(
+    inventory: dict[str, dict], provide_map: dict[str, set[str]] | None = None
+) -> set[str]:
     """BFS the Python dependency closure from the seed packages."""
     provide_map = provide_map or build_provide_map(inventory)
     seeds = rules().get("python_closure_seeds", [])
@@ -118,7 +122,7 @@ def classify(inventory: dict[str, dict], *, closure: set[str] | None = None) -> 
     py_runtime = set(py_seeds)
 
     result: dict[str, dict] = {}
-    for name, rec in inventory.items():
+    for name in inventory:
         reverse_deps = rd.get(name, 0)
         is_critical = name in p0 or name in py_runtime
         is_base = name in p1

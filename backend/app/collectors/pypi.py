@@ -60,7 +60,7 @@ def fetch_profile(source: str) -> dict:
         info = data.get("info", {})
         latest = info.get("version", "")
         release_dates: list[dt.date] = []
-        for ver, files in data.get("releases", {}).items():
+        for files in data.get("releases", {}).values():
             if files:
                 d = files[0].get("upload_time", "")
                 try:
@@ -68,23 +68,33 @@ def fetch_profile(source: str) -> dict:
                 except ValueError:
                     pass
         last_release = max(release_dates).isoformat() if release_dates else ""
-        days = (dt.date.today() - dt.date.fromisoformat(last_release)).days if last_release else None
-        results.append({
-            "pypi_name": project,
-            "pypi_latest": latest,
-            "pypi_last_release": last_release,
-            "pypi_days_since_release": days,
-            "pypi_requires_python": info.get("requires_python", ""),
-            "pypi_stale": bool(days is not None and days > 730),
-            "pypi_source": source,
-            "_releases": len(release_dates),
-        })
+        days = (
+            (dt.date.today() - dt.date.fromisoformat(last_release)).days if last_release else None
+        )
+        results.append(
+            {
+                "pypi_name": project,
+                "pypi_latest": latest,
+                "pypi_last_release": last_release,
+                "pypi_days_since_release": days,
+                "pypi_requires_python": info.get("requires_python", ""),
+                "pypi_stale": bool(days is not None and days > 730),
+                "pypi_source": source,
+                "_releases": len(release_dates),
+            }
+        )
     # Prefer the candidate that actually resolves to a real, released project.
     best = next((r for r in results if r["pypi_latest"]), None) or (results[0] if results else None)
     if not best:
-        return {"pypi_name": source, "pypi_source": source, "pypi_stale": False,
-                "pypi_latest": "", "pypi_last_release": "", "pypi_days_since_release": None,
-                "pypi_requires_python": ""}
+        return {
+            "pypi_name": source,
+            "pypi_source": source,
+            "pypi_stale": False,
+            "pypi_latest": "",
+            "pypi_last_release": "",
+            "pypi_days_since_release": None,
+            "pypi_requires_python": "",
+        }
     best.pop("_releases", None)
     return best
 

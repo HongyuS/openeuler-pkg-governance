@@ -17,10 +17,9 @@ import gzip
 import io
 import re
 import subprocess
-import zlib
 from collections import defaultdict
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 from xml.etree import ElementTree as ET
 
 from app.utils import LOG, version_compare
@@ -47,9 +46,7 @@ def decompress(path: Path) -> bytes:
         with gzip.open(path, "rb") as fh:
             return fh.read()
     if path.read_bytes()[:4] == b"\x28\xb5\x2f\xfd":  # zstd magic
-        out = subprocess.run(
-            ["zstdcat", "-T0", str(path)], capture_output=True, check=True
-        )
+        out = subprocess.run(["zstdcat", "-T0", str(path)], capture_output=True, check=True)
         return out.stdout
     # Possibly plain XML (very unusual) — let ElementTree tell us later.
     return path.read_bytes()
@@ -105,7 +102,7 @@ def _version(ver_el) -> str:
 def iter_packages(xml_bytes: bytes) -> Iterator[ET.Element]:
     """Yield each ``<package>`` element with minimal parser reset."""
     # We strip the heavy inner text only where needed; use iterparse to stream.
-    for event, elem in ET.iterparse(io.BytesIO(xml_bytes), events=("end",)):
+    for _event, elem in ET.iterparse(io.BytesIO(xml_bytes), events=("end",)):
         if _local(elem.tag) == "package":
             yield elem
             elem.clear()
@@ -188,7 +185,6 @@ def build_source_records(records: list[dict]) -> dict[str, dict]:
     provides_set, requires_set, binaries, reverse}}.
     """
     src: dict[str, dict] = {}
-    reverse: dict[str, int] = defaultdict(int)
 
     for rec in records:
         sname = source_name_from_rpm(rec["source"]) or rec["name"]
@@ -264,7 +260,6 @@ def collect_release(
     `repomd_url` points at ``.../{release}/{target}/{arch}/repodata/repomd.xml``.
     """
     import hashlib
-    import tempfile
 
     key = hashlib.sha256(repomd_url.encode()).hexdigest()[:16]
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -292,7 +287,12 @@ def collect_release(
             sname = source_name_from_rpm(rec["source"]) or rec["name"]
             entry = result.setdefault(
                 sname,
-                {"version": rec["version"], "arches": [], "summary": rec["summary"], "license": rec["license"]},
+                {
+                    "version": rec["version"],
+                    "arches": [],
+                    "summary": rec["summary"],
+                    "license": rec["license"],
+                },
             )
             if version_compare(rec["version"], entry["version"]) > 0:
                 entry["version"] = rec["version"]

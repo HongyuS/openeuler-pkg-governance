@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import re
 import zlib
-from pathlib import Path
 
 from app import config
 from app.utils import LOG, http_get
@@ -136,7 +135,7 @@ def collect(baselines: tuple[str, str] | None = None) -> dict[str, dict]:
         versions[stream] = {name: rec["version"] for name, rec in pkgs.items()}
         LOG.info("ubuntu %s (%s): %d source packages", stream, codename, len(versions[stream]))
 
-    result = {"versions": versions, "meta": meta}
+    result: dict[str, dict] = {"versions": versions, "meta": meta}
     try:
         config.UBUNTU_CACHE.parent.mkdir(parents=True, exist_ok=True)
         config.UBUNTU_CACHE.write_text(json.dumps(result, ensure_ascii=False))

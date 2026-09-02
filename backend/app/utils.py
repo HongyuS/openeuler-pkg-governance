@@ -41,13 +41,16 @@ def parse_version(version: str) -> tuple:
             rest = v
 
     match = re.match(r"^(?P<ver>[\w.~+\-]+?)(?:-(?P<rel>[\w.~+\-]+))?$", rest)
-    ver = match.group("ver") if match else rest
-    rel = match.group("rel") or ""
+    if match:
+        ver = match.group("ver")
+        rel = match.group("rel") or ""
+    else:
+        ver, rel = rest, ""
 
     def _tok(part: str) -> tuple:
         # Split into numeric and alpha tokens; numeric compare numerically.
         tokens = re.split(r"([0-9]+|[A-Za-z]+)", part)
-        out = []
+        out: list[tuple[int, str | int]] = []
         for t in tokens:
             if not t:
                 continue
@@ -145,8 +148,9 @@ def days_since(value: str, ref: str | None = None) -> int | None:
     return days_between(ref, value)
 
 
-def http_get(url: str, *, headers: dict | None = None, timeout: float = 20,
-             params: dict | None = None) -> requests.Response:
+def http_get(
+    url: str, *, headers: dict | None = None, timeout: float = 20, params: dict | None = None
+) -> requests.Response:
     """GET with retry-once and a small backoff for transient 429/5xx."""
     hdrs = {"User-Agent": "pkg-governance/1.0", **(headers or {})}
     last_exc: Exception | None = None
@@ -155,6 +159,7 @@ def http_get(url: str, *, headers: dict | None = None, timeout: float = 20,
             resp = requests.get(url, headers=hdrs, timeout=timeout, params=params)
             if resp.status_code in (429, 500, 502, 503, 504) and attempt == 0:
                 import time
+
                 time.sleep(1.0 + attempt)
                 continue
             return resp
@@ -162,6 +167,7 @@ def http_get(url: str, *, headers: dict | None = None, timeout: float = 20,
             last_exc = exc
             if attempt == 0:
                 import time
+
                 time.sleep(0.5)
                 continue
     if last_exc:

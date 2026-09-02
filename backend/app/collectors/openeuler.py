@@ -26,9 +26,18 @@ INNOV_RE = re.compile(r"^openEuler-(?P<ver>\d+\.\d+)(?:-DevStation)?$")
 IGNORE = re.compile(r"(preview|Embedded|debug|source|RISC|loong|ARM64|X86)", re.I)
 
 
+def _match(pattern: re.Pattern[str], s: str) -> re.Match[str]:
+    """Match a stream name already filtered by ``pattern`` (asserts for mypy)."""
+    m = pattern.match(s)
+    assert m, s
+    return m
+
+
 def _iter_releases() -> list[str]:
     resp = http_get(config.OPEN_EULER_MIRROR + "/", timeout=30)
-    return sorted({m.group(1).strip("/") for m in re.finditer(r'href="(openEuler-[^"/]+)/?"', resp.text)})
+    return sorted(
+        {m.group(1).strip("/") for m in re.finditer(r'href="(openEuler-[^"/]+)/?"', resp.text)}
+    )
 
 
 def _ver_key(ver: str) -> tuple:
@@ -49,18 +58,23 @@ def _mirror_lts_streams(family: str | None = None) -> list[str]:
             continue
         out.append(r)
     # Sort by version then SP, newest SP last.
-    out.sort(key=lambda r: (_ver_key(LTS_RE.match(r).group("ver")), int(LTS_RE.match(r).group("sp") or 0)))
+    out.sort(
+        key=lambda r: (
+            _ver_key(_match(LTS_RE, r).group("ver")),
+            int(_match(LTS_RE, r).group("sp") or 0),
+        )
+    )
     return out
 
 
 def _mirror_innovation_streams() -> list[str]:
     out = sorted(
         (r for r in _iter_releases() if INNOV_RE.match(r) and not IGNORE.search(r)),
-        key=lambda r: _ver_key(INNOV_RE.match(r).group("ver")),
+        key=lambda r: _ver_key(_match(INNOV_RE, r).group("ver")),
     )
     # Keep the current-generation innovation cycles only (the EOL 20.09–23.09
     # series are archived and not meaningful for a live compatibility view).
-    return [r for r in out if _ver_key(INNOV_RE.match(r).group("ver")) >= (24, 9)]
+    return [r for r in out if _ver_key(_match(INNOV_RE, r).group("ver")) >= (24, 9)]
 
 
 def _iter_dailybuild_innovation() -> list[str]:
@@ -72,10 +86,10 @@ def _iter_dailybuild_innovation() -> list[str]:
         return []
     out = []
     for entry in entries:
-        release = entry[len("EBS-"):] if entry.startswith("EBS-") else entry
+        release = entry[len("EBS-") :] if entry.startswith("EBS-") else entry
         if INNOV_RE.match(release) and not IGNORE.search(entry):
             out.append(release)
-    return sorted(out, key=lambda r: _ver_key(INNOV_RE.match(r).group("ver")))
+    return sorted(out, key=lambda r: _ver_key(_match(INNOV_RE, r).group("ver")))
 
 
 def _kernel_variants(build_url: str, ver: str) -> list[str]:
@@ -85,7 +99,10 @@ def _kernel_variants(build_url: str, ver: str) -> list[str]:
         resp = http_get(f"{build_url}/", timeout=20)
     except Exception:  # noqa: BLE001
         return []
-    found = {m.group(1) for m in re.finditer(rf'href="{re.escape(ver)}-with-kernel-([0-9.]+)/"', resp.text)}
+    found = {
+        m.group(1)
+        for m in re.finditer(rf'href="{re.escape(ver)}-with-kernel-([0-9.]+)/"', resp.text)
+    }
     return sorted(found, key=lambda k: tuple(int(x) for x in k.split(".")))
 
 
@@ -94,7 +111,7 @@ def _iter_devstation_builds() -> list[dict]:
     release = _latest_devstation_release()
     if not release:
         return []
-    ver = INNOV_RE.match(release).group("ver")
+    ver = _match(INNOV_RE, release).group("ver")
     idx_url = f"{config.OPEN_EULER_DAILYBUILD}/EBS-{release}/"
     try:
         resp = http_get(idx_url, timeout=30)
@@ -107,7 +124,7 @@ def _iter_devstation_builds() -> list[dict]:
         if re.match(r"^rc\d+_openeuler-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$", d):
             rcs.append((int(d.split("_")[0][2:]), d))
         elif re.match(r"^openeuler-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$", d):
-            dailies.append((d[len("openeuler-"):], d))
+            dailies.append((d[len("openeuler-") :], d))
     builds: list[dict] = []
     # RC builds nest repos per kernel variant (6.6 baseline, 6.18 experimental);
     # expose each variant as its own selectable stream.
@@ -115,21 +132,28 @@ def _iter_devstation_builds() -> list[dict]:
         base = f"{idx_url}{d}"
         for i, k in enumerate(_kernel_variants(base, ver) or [""]):
             tag = f"（内核 {k}·{'基线' if i == 0 else '实验'}）" if k else ""
-            builds.append({
-                "id": f"{release}-rc{n}" + (f"-kernel-{k}" if k else ""),
-                "label": f"{release} RC{n}{tag}",
-                "base": f"{base}/{ver}-with-kernel-{k}" if k else base,
-                "date": d.split("_")[1], "rc": True,
-                "kernel": k, "baseline": i == 0,
-            })
+            builds.append(
+                {
+                    "id": f"{release}-rc{n}" + (f"-kernel-{k}" if k else ""),
+                    "label": f"{release} RC{n}{tag}",
+                    "base": f"{base}/{ver}-with-kernel-{k}" if k else base,
+                    "date": d.split("_")[1],
+                    "rc": True,
+                    "kernel": k,
+                    "baseline": i == 0,
+                }
+            )
     # Keep only the newest few dailies to avoid noise.
     for date, d in sorted(dailies, reverse=True)[: int(config.INCLUDE_DEVSTATION_DAILY) * 3]:
-        builds.append({
-            "id": f"{release}-daily-{date[:10].replace('-', '')}",
-            "label": f"{release} 每日构建 {date[:10]}",
-            "base": f"{idx_url}{d}",
-            "date": date, "rc": False,
-        })
+        builds.append(
+            {
+                "id": f"{release}-daily-{date[:10].replace('-', '')}",
+                "label": f"{release} 每日构建 {date[:10]}",
+                "base": f"{idx_url}{d}",
+                "date": date,
+                "rc": False,
+            }
+        )
     return builds
 
 
@@ -147,41 +171,48 @@ def stream_catalog(family: str | None = None) -> list[dict]:
     fam = family or config.DEFAULT_LTS_FAMILY
     streams: list[dict] = []
     for release in _mirror_lts_streams(fam):
-        m = LTS_RE.match(release)
+        m = _match(LTS_RE, release)
         sp = m.group("sp")
-        streams.append({
-            "id": release,
-            "label": f"openEuler {m.group('ver')} LTS" + (f" SP{sp}" if sp else ""),
-            "kind": "LTS",
-            "release": release,
-            "base": f"{config.OPEN_EULER_MIRROR}/{release}",
-            "source": "mirror",
-            "date": "",
-        })
+        streams.append(
+            {
+                "id": release,
+                "label": f"openEuler {m.group('ver')} LTS" + (f" SP{sp}" if sp else ""),
+                "kind": "LTS",
+                "release": release,
+                "base": f"{config.OPEN_EULER_MIRROR}/{release}",
+                "source": "mirror",
+                "date": "",
+            }
+        )
     for release in _mirror_innovation_streams():
-        m = INNOV_RE.match(release)
-        streams.append({
-            "id": release,
-            "label": f"openEuler {m.group('ver')}" + (" DevStation" if "-DevStation" in release else ""),
-            "kind": "innovation",
-            "release": release,
-            "base": f"{config.OPEN_EULER_MIRROR}/{release}",
-            "source": "mirror",
-            "date": "",
-        })
+        m = _match(INNOV_RE, release)
+        streams.append(
+            {
+                "id": release,
+                "label": f"openEuler {m.group('ver')}"
+                + (" DevStation" if "-DevStation" in release else ""),
+                "kind": "innovation",
+                "release": release,
+                "base": f"{config.OPEN_EULER_MIRROR}/{release}",
+                "source": "mirror",
+                "date": "",
+            }
+        )
     for b in _iter_devstation_builds():
-        streams.append({
-            "id": b["id"],
-            "label": b["label"],
-            "kind": "innovation",
-            "release": b["id"],
-            "base": b["base"],
-            "source": "dailybuild",
-            "date": b["date"],
-            "rc": b.get("rc", False),
-            "kernel": b.get("kernel", ""),
-            "baseline": b.get("baseline", False),
-        })
+        streams.append(
+            {
+                "id": b["id"],
+                "label": b["label"],
+                "kind": "innovation",
+                "release": b["id"],
+                "base": b["base"],
+                "source": "dailybuild",
+                "date": b["date"],
+                "rc": b.get("rc", False),
+                "kernel": b.get("kernel", ""),
+                "baseline": b.get("baseline", False),
+            }
+        )
     return streams
 
 
@@ -276,10 +307,21 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
         for name, rec in src.items():
             entry = merged.setdefault(
                 name,
-                {"name": name, "version": "", "latest_repo": "", "has_source": False,
-                 "has_debug": False, "in_epol": False, "in_update": False,
-                 "arches": [], "summary": rec.get("summary", ""), "license": rec.get("license", ""),
-                 "provides": [], "requires": [], "reverse": 0},
+                {
+                    "name": name,
+                    "version": "",
+                    "latest_repo": "",
+                    "has_source": False,
+                    "has_debug": False,
+                    "in_epol": False,
+                    "in_update": False,
+                    "arches": [],
+                    "summary": rec.get("summary", ""),
+                    "license": rec.get("license", ""),
+                    "provides": [],
+                    "requires": [],
+                    "reverse": 0,
+                },
             )
             # Newest binary version wins (full EVR, so update patches supersede).
             if spec["kind"] == "binary":
@@ -348,12 +390,21 @@ def collect(streams: dict[str, str] | None = None) -> dict[str, dict]:
         for name, rec in src.items():
             entry = merged.setdefault(
                 name,
-                {"name": name, "versions": {}, "arches": [], "summary": rec.get("summary", ""),
-                 "license": rec.get("license", ""), "reverse": rec.get("reverse", 0),
-                 "provides": rec.get("provides", []), "requires": rec.get("requires", []),
-                 "has_source": rec.get("has_source", False), "has_debug": rec.get("has_debug", False),
-                 "in_epol": rec.get("in_epol", False), "in_update": rec.get("in_update", False),
-                 "latest_repo": rec.get("latest_repo", "")},
+                {
+                    "name": name,
+                    "versions": {},
+                    "arches": [],
+                    "summary": rec.get("summary", ""),
+                    "license": rec.get("license", ""),
+                    "reverse": rec.get("reverse", 0),
+                    "provides": rec.get("provides", []),
+                    "requires": rec.get("requires", []),
+                    "has_source": rec.get("has_source", False),
+                    "has_debug": rec.get("has_debug", False),
+                    "in_epol": rec.get("in_epol", False),
+                    "in_update": rec.get("in_update", False),
+                    "latest_repo": rec.get("latest_repo", ""),
+                },
             )
             entry["versions"][stream_name] = rec.get("version", "")
             # Repo tags follow whichever stream carries the newest version.
