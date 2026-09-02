@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Platform
+.DS_Store
+
+# Generated data (regenerate with `make build` / `make seed`)
+backend/data/cache/
+
+# Frontend build tooling
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# Local overrides
+.env
+*.log
