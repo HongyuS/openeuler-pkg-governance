@@ -78,29 +78,59 @@ def _iter_dailybuild_innovation() -> list[str]:
     return sorted(out, key=lambda r: _ver_key(INNOV_RE.match(r).group("ver")))
 
 
+def _kernel_variants(build_url: str, ver: str) -> list[str]:
+    """Kernel variants nested under a build dir (``<ver>-with-kernel-<k>/``),
+    baseline (lowest version) first."""
+    try:
+        resp = http_get(f"{build_url}/", timeout=20)
+    except Exception:  # noqa: BLE001
+        return []
+    found = {m.group(1) for m in re.finditer(rf'href="{re.escape(ver)}-with-kernel-([0-9.]+)/"', resp.text)}
+    return sorted(found, key=lambda k: tuple(int(x) for x in k.split(".")))
+
+
 def _iter_devstation_builds() -> list[dict]:
-    """Every RC and dated daily build of the DevStation release."""
+    """Every RC (per kernel variant) and dated daily build of DevStation."""
     release = _latest_devstation_release()
     if not release:
         return []
+    ver = INNOV_RE.match(release).group("ver")
     idx_url = f"{config.OPEN_EULER_DAILYBUILD}/EBS-{release}/"
     try:
         resp = http_get(idx_url, timeout=30)
     except Exception:  # noqa: BLE001
         return []
     dirs = re.findall(r'href="([A-Za-z0-9_.-]+)/"', resp.text)
-    builds: list[dict] = []
+    rcs: list[tuple[int, str]] = []
+    dailies: list[tuple[str, str]] = []
     for d in dirs:
         if re.match(r"^rc\d+_openeuler-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$", d):
-            builds.append({"id": f"{release}-rc{d.split('_')[0][2:]}", "build": d, "label": f"{release} RC{d.split('_')[0][2:]}", "date": d.split("_")[1], "rc": True})
+            rcs.append((int(d.split("_")[0][2:]), d))
         elif re.match(r"^openeuler-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$", d):
-            date = d.strip("openeuler-")
-            builds.append({"id": f"{release}-daily-{date[:10].replace('-','')}", "build": d, "label": f"{release} 每日构建 {date[:10]}", "date": date, "rc": False})
-    # Sort: RC builds first (by rc number), then daily (by date desc), keep only
-    # the newest few dailies to avoid noise.
-    rc = sorted((b for b in builds if b["rc"]), key=lambda b: int(b["id"].rsplit("rc", 1)[-1]))
-    daily = sorted((b for b in builds if not b["rc"]), key=lambda b: b["date"], reverse=True)
-    return rc + daily[: int(config.INCLUDE_DEVSTATION_DAILY) * 3]
+            dailies.append((d[len("openeuler-"):], d))
+    builds: list[dict] = []
+    # RC builds nest repos per kernel variant (6.6 baseline, 6.18 experimental);
+    # expose each variant as its own selectable stream.
+    for n, d in sorted(rcs):
+        base = f"{idx_url}{d}"
+        for i, k in enumerate(_kernel_variants(base, ver) or [""]):
+            tag = f"（内核 {k}·{'基线' if i == 0 else '实验'}）" if k else ""
+            builds.append({
+                "id": f"{release}-rc{n}" + (f"-kernel-{k}" if k else ""),
+                "label": f"{release} RC{n}{tag}",
+                "base": f"{base}/{ver}-with-kernel-{k}" if k else base,
+                "date": d.split("_")[1], "rc": True,
+                "kernel": k, "baseline": i == 0,
+            })
+    # Keep only the newest few dailies to avoid noise.
+    for date, d in sorted(dailies, reverse=True)[: int(config.INCLUDE_DEVSTATION_DAILY) * 3]:
+        builds.append({
+            "id": f"{release}-daily-{date[:10].replace('-', '')}",
+            "label": f"{release} 每日构建 {date[:10]}",
+            "base": f"{idx_url}{d}",
+            "date": date, "rc": False,
+        })
+    return builds
 
 
 def _latest_devstation_release() -> str:
@@ -145,10 +175,12 @@ def stream_catalog(family: str | None = None) -> list[dict]:
             "label": b["label"],
             "kind": "innovation",
             "release": b["id"],
-            "base": f"{config.OPEN_EULER_DAILYBUILD}/EBS-{_latest_devstation_release()}/{b['build']}",
+            "base": b["base"],
             "source": "dailybuild",
             "date": b["date"],
             "rc": b.get("rc", False),
+            "kernel": b.get("kernel", ""),
+            "baseline": b.get("baseline", False),
         })
     return streams
 
@@ -165,9 +197,12 @@ def discover_latest() -> dict[str, str]:
     # Latest innovation: mirror release first, else newest DevStation build.
     best_innov_id = innov[-1]["id"] if innov else ""
     if devstation:
-        # Prefer the most recent RC, otherwise the newest daily build.
+        # Prefer the baseline kernel variant of the newest RC, else newest daily.
         rc = [s for s in devstation if s.get("rc")]
-        best_innov_id = (rc[-1] if rc else sorted(devstation, key=lambda s: s["date"], reverse=True)[0])["id"]
+        if rc:
+            best_innov_id = next((s["id"] for s in reversed(rc) if s.get("baseline")), rc[-1]["id"])
+        else:
+            best_innov_id = sorted(devstation, key=lambda s: s["date"], reverse=True)[0]["id"]
     return {
         "openEuler_LTS": lts[-1]["id"] if lts else "",
         "openEuler_innovation": best_innov_id,
@@ -188,29 +223,19 @@ def _find_repomd(base: str) -> str | None:
     return None
 
 
-def _prefixes(base: str) -> list[str]:
-    """Candidate repo roots: the base, plus the kernel-variant nesting used by
-    some DevStation daily/RC builds."""
-    out = [base]
-    for k in ("6.18", "6.6", "5.10"):
-        out.append(f"{base}/26.09-with-kernel-{k}")
-    return out
-
-
 def _repomd_for(base: str, spec: dict, arch: str | None = None) -> str | None:
-    """Return a working repomd.xml URL for a repo spec, or None."""
+    """Return a working repomd.xml URL for a repo spec, or None. The kernel
+    variant (if any) is already encoded in ``base`` by the stream catalogue."""
     arch = arch or config.OPEN_EULER_ARCH
-    for prefix in _prefixes(base):
-        path = spec["path"]
-        if spec["kind"] in ("source",):
-            url = f"{prefix}/{path}/repodata/repomd.xml"
-        else:
-            url = f"{prefix}/{path}/{arch}/repodata/repomd.xml"
-        try:
-            if http_get(url, timeout=12).status_code == 200:
-                return url
-        except Exception:  # noqa: BLE001
-            continue
+    if spec["kind"] in ("source",):
+        url = f"{base}/{spec['path']}/repodata/repomd.xml"
+    else:
+        url = f"{base}/{spec['path']}/{arch}/repodata/repomd.xml"
+    try:
+        if http_get(url, timeout=12).status_code == 200:
+            return url
+    except Exception:  # noqa: BLE001
+        pass
     return None
 
 
