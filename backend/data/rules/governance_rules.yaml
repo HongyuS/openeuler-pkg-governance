@@ -1,0 +1,149 @@
+# Governance rules derived from the openEuler package-governance plan.
+# These are the deterministic underpinnings for the "AI full-package portrait".
+
+# Compute the Python dependency closure from these seeds when repository
+# dependency metadata is available.
+python_closure_seeds:
+  - "python3"
+  - "python3-libs"
+  - "python3-py"
+  - "python3-setuptools"
+  - "python3-pip"
+  - "python3-devel"
+  - "python3-rpm"
+  - "python3-gobject"
+
+# The minimal critical set (P0 wave): align these to the latest release first.
+P0_critical:
+  - "kernel"
+  - "kernel-devel"
+  - "glibc"
+  - "glibc-devel"
+  - "glibc-common"
+  - "openssl"
+  - "openssl-libs"
+  - "openssl-devel"
+  - "systemd"
+  - "systemd-libs"
+  - "bash"
+  - "coreutils"
+  - "gcc"
+  - "gcc-c++"
+  - "libgcc"
+  - "libstdc++"
+  - "zlib"
+  - "xz"
+  - "bzip2"
+  - "sed"
+  - "grep"
+  - "findutils"
+  - "tar"
+  - "ca-certificates"
+  - "curl"
+  - "iproute"
+  - "iptables"
+  - "nftables"
+  - "libvirt"
+  - "podman"
+  - "containerd"
+  - "docker"
+  - "mariadb"
+  - "postgresql"
+  - "python3"
+  - "python3-libs"
+  - "python3-devel"
+
+# Secondary base packages (P1 wave): network / storage / toolchain.
+P1_base:
+  - "openssh"
+  - "openssh-server"
+  - "openssh-clients"
+  - "wget"
+  - "rsync"
+  - "lvm2"
+  - "e2fsprogs"
+  - "xfsprogs"
+  - "btrfs-progs"
+  - "util-linux"
+  - "procps-ng"
+  - "psmisc"
+  - "attr"
+  - "acl"
+  - "shadow-utils"
+  - "sudo"
+  - "cronie"
+  - "cronie-anacron"
+  - "cmake"
+  - "ninja-build"
+  - "autoconf"
+  - "automake"
+  - "libtool"
+  - "pkgconf"
+  - "meson"
+  - "perl"
+  - "ruby"
+  - "java-17-openjdk"
+  - "java-1.8.0-openjdk"
+
+# Special / unusual packages that must follow an independent fast-update channel.
+# Version info for these is fetched from the network rather than the OS repo.
+special_packages:
+  - name: "google-chrome-stable"
+    note: "DevStation (toB primary, toC secondary): upstream latest from network, independent fast-update channel."
+  - name: "microsoft-edge-stable"
+    note: "DevStation browser: upstream latest from network, independent fast-update channel."
+  - name: "code"
+    note: "VS Code for DevStation: upstream latest from network."
+  - name: "obs-studio"
+    note: "Streaming tool: upstream fast-moving minor releases."
+
+# Weighting used to turn a raw monthly activity series into a rolling score.
+activity_weights:
+  month_decay: 0.92        # per-month decay; recent months weigh more
+  rolling_windows:
+    "1": 0.40               # 1-month window weight in the composite score
+    "3": 0.30
+    "6": 0.20
+    "12": 0.10
+
+# Map a normalised activity index (0..1) to a letter grade.
+activity_grade_bands:
+  A: 0.62
+  B: 0.42
+  C: 0.22
+  D: 0.0
+
+# Maintenance effort model (person-days / year).
+effort:
+  upgrade_person_days_min: 3
+  upgrade_person_days_max: 10
+  cve_person_days_min: 0.5
+  cve_person_days_max: 2.0
+  routine_person_days: 2
+  # Average annual upgrade cycles per importance tier.
+  upgrades_per_year:
+    core: 3
+    important: 2
+    ordinary: 1
+  # Reference person-years (for capacity planning narrative).
+  reference_person_years:
+    core: 0.75
+    important: 0.2
+    ordinary: 0.075
+
+# Version-comparison thresholds (calendar days behind the newest baseline).
+version_lag:
+  stale_days: 180          # > this => "outdated" flag
+  critical_days: 365       # > this => "severely outdated"
+  # Ignore lag for packages that are deliberately pinned or security-only.
+  ignore_suffixes: [".el", ".oe", ".fc", ".module"]
+
+# Cross-distribution source-name aliases: openEuler source -> downstream source.
+# e.g. openEuler's "kernel" source is shipped as "linux" upstream in Ubuntu.
+source_aliases:
+  kernel: linux
+  kernel-devel: linux
+  openssl: openssl
+  "python3": python3
+  postgresql: postgresql
+  mariadb: mariadb
