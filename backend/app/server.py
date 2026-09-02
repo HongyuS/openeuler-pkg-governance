@@ -268,6 +268,10 @@ def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
                     k: p.get("python", {}).get(k, "")
                     for k in ("kind", "pypi_name", "pypi_latest", "pypi_stale", "compat_ok", "system_python")
                 },
+                "npm": {
+                    k: p.get("npm", {}).get(k, "")
+                    for k in ("kind", "npm_name", "npm_latest", "npm_stale", "npm_deprecated")
+                },
                 "versions": r["versions"],
                 "last_commit": p.get("activity", {}).get("last_commit", ""),
                 "open_backlog": (p.get("activity", {}).get("open_issues", 0) + p.get("activity", {}).get("open_prs", 0)),

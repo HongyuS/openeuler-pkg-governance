@@ -42,6 +42,13 @@ export interface PackageRow {
     compat_ok: boolean;
     system_python: string;
   };
+  npm: {
+    kind: string;
+    npm_name: string;
+    npm_latest: string;
+    npm_stale: boolean;
+    npm_deprecated: boolean;
+  };
   versions: Record<string, string>;
   last_commit: string;
   open_backlog: number;
@@ -59,7 +66,12 @@ export interface SummaryDist {
 }
 
 export interface Digest {
-  meta: { streams: StreamDef[]; default: Record<string, string>; baselines: Record<string, string>; data_date: string };
+  meta: {
+    streams: StreamDef[];
+    default: Record<string, string>;
+    baselines: Record<string, string>;
+    data_date: string;
+  };
   summary: { distributions: SummaryDist; selected: Record<string, string> };
   packages: PackageRow[];
 }
@@ -125,6 +137,15 @@ export interface PackageDetail {
     pypi_requires_python: string;
     compat_ok: boolean;
     system_python: string;
+    notes?: string[];
+  };
+  npm: {
+    kind: string;
+    npm_name: string;
+    npm_latest: string;
+    npm_last_release: string;
+    npm_stale: boolean;
+    npm_deprecated: boolean;
     notes?: string[];
   };
 }

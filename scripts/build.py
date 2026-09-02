@@ -30,7 +30,7 @@ sys.path.insert(0, str(BACKEND))
 os.environ.setdefault("PYTHONPATH", str(BACKEND))
 
 from app import config  # noqa: E402
-from app.collectors import gitcode, openeuler, pypi, repos, ubuntu  # noqa: E402
+from app.collectors import gitcode, npm, openeuler, pypi, repos, ubuntu  # noqa: E402
 from app.engine import pipeline  # noqa: E402
 from app.utils import LOG, setup_logging  # noqa: E402
 
@@ -59,6 +59,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-activity", action="store_true")
     ap.add_argument("--no-pypi", action="store_true")
+    ap.add_argument("--no-npm", action="store_true")
     ap.add_argument("--activity-limit", type=int, default=config.ACTIVITY_SAMPLE_LIMIT)
     args = ap.parse_args()
 
@@ -123,9 +124,14 @@ def main() -> None:
         pip_mods = [n for n in inventory if pypi.is_pip_module(n)]
         LOG.info("fetching PyPI profiles for %d pip modules…", len(pip_mods))
         pypi_profiles = pypi.collect(pip_mods, cache=config.CACHE_DIR / "pypi.json")
+    npm_profiles: dict[str, dict] = {}
+    if not args.no_npm:
+        npm_mods = [n for n in inventory if npm.is_npm_module(n)]
+        LOG.info("fetching npm profiles for %d npm modules…", len(npm_mods))
+        npm_profiles = npm.collect(npm_mods, cache=config.CACHE_DIR / "npm.json")
     packages = pipeline.build_packages(
         inventory, ub_versions, activity, special=special,
-        pypi_profiles=pypi_profiles,
+        pypi_profiles=pypi_profiles, npm_profiles=npm_profiles,
     )
 
     meta = {

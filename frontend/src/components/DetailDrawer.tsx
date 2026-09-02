@@ -116,6 +116,24 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
           ) : null}
         </div>
       ) : null}
+      {d.npm?.kind === "npm_module" ? (
+        <div className="box">
+          <h4>Node.js / npm 包</h4>
+          <div className="muted">
+            npm 上游：{d.npm.npm_name}（最新 {d.npm.npm_latest || "—"}）
+            {" · "}
+            {d.npm.npm_stale
+              ? <span className="flag sunset">npm 停更 &gt;2 年</span>
+              : <span className="flag good">上游在维护</span>}
+            {d.npm.npm_deprecated
+              ? <>{" · "}<span className="flag sunset">已废弃 deprecated</span></>
+              : null}
+          </div>
+          {d.npm.notes?.length ? (
+            <ul>{(d.npm.notes as string[]).map((n, i) => <li key={i}>{n}</li>)}</ul>
+          ) : null}
+        </div>
+      ) : null}
       <div className="box">
         <h4>治理建议</h4>
         <div>建议：{d.comparison.lagging ? <span className="flag lag">需升级</span> : <span className="flag good">同步</span>} {dispBadge(g.disposal)}</div>

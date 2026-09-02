@@ -101,6 +101,8 @@ class Package:
     latest_repo: str = ""             # repo holding the newest version
     # Python/pip assessment for pip-module source packages (python-*).
     python: dict[str, Any] = field(default_factory=dict)
+    # Node.js/npm assessment for npm-module source packages (nodejs-*).
+    npm: dict[str, Any] = field(default_factory=dict)
     activity: RepoSignals = field(default_factory=RepoSignals)
     comparison: Comparison = field(default_factory=Comparison)
     governance: Governance = field(default_factory=Governance)

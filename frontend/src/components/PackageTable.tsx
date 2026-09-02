@@ -207,8 +207,10 @@ export function PackageTable(props: {
 function RepoTag(props: { row: PackageRow }) {
   const r = props.row;
   const py = r.python?.kind === "pip_module";
+  const npm = r.npm?.kind === "npm_module";
   const tags: string[] = [];
   if (py) tags.push("pip");
+  if (npm) tags.push("npm");
   if (r.in_update) tags.push("update");
   if (r.in_epol) tags.push("EPOL");
   if (r.has_debug) tags.push("debug");

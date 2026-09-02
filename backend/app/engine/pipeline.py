@@ -31,10 +31,12 @@ def build_packages(
     special: dict[str, str] | None = None,
     data_date: str = "",
     pypi_profiles: dict[str, dict] | None = None,
+    npm_profiles: dict[str, dict] | None = None,
 ) -> list[Package]:
     """Produce the full list of Package portraits (already governance-scored)."""
     special = special or {}
     pypi_profiles = pypi_profiles or {}
+    npm_profiles = npm_profiles or {}
     data_date = data_date or iso_today()
     sys_python = python_gov.system_python_version(inventory)
 
@@ -111,6 +113,6 @@ def build_packages(
             data_date=data_date,
         )
         pkg = python_gov.apply_python(pkg, inventory, pypi_profiles, sys_python, system_set)
-        pkg = nodejs_gov.apply_nodejs(pkg, system_set)
+        pkg = nodejs_gov.apply_nodejs(pkg, system_set, npm_profiles)
         packages.append(pkg)
     return packages

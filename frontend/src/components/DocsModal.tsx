@@ -59,6 +59,7 @@ export function DocsModal(props: { onClose: () => void }) {
               <tr><td>api.gitcode.com/api/v5</td><td>每包 commits/pulls/issues 活跃度 + 待办</td></tr>
               <tr><td>archive.ubuntu.com</td><td>Ubuntu LTS(26.04) + 前沿(26.10) 版本基线</td></tr>
               <tr><td>pypi.org/pypi/{"{project}"}/json</td><td>python-* pip 模块上游最新版本 / 停更 / Requires-Python</td></tr>
+              <tr><td>registry.npmjs.org/{"{name}"}</td><td>nodejs-* npm 模块上游最新版本 / 停更 / deprecated</td></tr>
               <tr><td>backend/data/rules/governance_rules.yaml</td><td>P0/P1/P2、Python 闭包、特殊包、滞后阈值、人力模型</td></tr>
             </tbody>
           </table>
@@ -85,6 +86,7 @@ export function DocsModal(props: { onClose: () => void }) {
             由 npm/pnpm/bun 生态承接——无关键依赖的建议日落，仅被非关键包依赖的标记迁移提示。
             Node.js 运行时与包管理器本身（<code>nodejs</code>/<code>npm</code>/<code>pnpm</code> 等，
             见 <code>node_toolchain</code> 规则）作为开发者生态入口保留维护，不参与日落。
+            npm 画像（上游停更 &gt;730 天、官方 deprecated 标记）作为风险备注保留。
           </p>
 
           <h4>运行</h4>
