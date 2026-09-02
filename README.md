@@ -94,8 +94,8 @@ make ui
 make build            #  全量（含 GitCode 活跃度采集）
 make build-quick      #  仅包+Ubuntu，快一些
 
-# 4) 启动服务，打开 http://127.0.0.1:8000
-make run
+# 4) 启动服务（带实例发现/端口管理），打开 http://127.0.0.1:8000
+make dev             # 停止 make stop / 状态 make status / 重启 make restart
 ```
 
 或用现成缓存快速重建数据集（建议在有 `make build` 产出后使用）：
@@ -167,6 +167,18 @@ make seed && make run
 - 创新版 26.09-DevStation 在稳定镜像发布后，会自动切换为 `repo.openeuler.org`（无需改配置）。
 - **前端**：Vite + React + TypeScript + ECharts，`pnpm` 管理；视觉复刻 openEuler 官网，并**直接使用 openEuler 官方 Logo**（`frontend/public/oe-logo.svg`，取自 openeuler.org 品牌页）。刷新数据按钮采用 React 渲染与 ECharts 生命周期管理，不会出现残留空框。
 - Python/pip 画像默认采集全部 pip 模块（约 1200+），可从 `make build -- --no-pypi` 跳过。
+
+## 工程能力
+
+| 能力 | 工具 | 入口 |
+| --- | --- | --- |
+| Python lint/format | ruff（`E,F,W,I,UP,B`，行宽 100） | `make lint` / `make format` |
+| Python 类型检查 | mypy（backend/app + scripts） | `make typecheck` |
+| 前端 lint / 类型 | eslint 9 + typescript-eslint / tsc | `make lint` / `make typecheck` |
+| 一键质量门 | 全部串起来 | `make check` |
+| 服务生命周期 | `scripts/dev.py`：实例发现（lsof+pgrep）、幂等启动、端口冲突拒绝/自动改道、`/api/health` 健康检查、优雅停止 | `make dev` / `make stop` / `make status` / `make restart` |
+
+Agent 协作规范见 [AGENTS.md](AGENTS.md)；开发流程 skill 见 `.trae/skills/pkg-gov-dev/`。
 
 ## License
 
