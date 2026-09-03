@@ -3,14 +3,43 @@
 For each package the *upstream* portion of the openEuler version (LTS and
 innovation streams) is compared against the newest Ubuntu (and optional SUSE)
 baseline. A package is flagged as **outdated** when the newest downstream
-baseline carries a strictly newer upstream version.
+baseline carries a strictly newer upstream version; the leading version-segment
+difference is recorded as ``lag_degree`` (patch/minor/major) so the priority
+score can grade lag instead of applying a flat penalty (docs/scoring-v2.md D4).
 """
 
 from __future__ import annotations
 
+import re
+
 from app.engine.rules_loader import rules
 from app.models import Comparison, VersionRow
 from app.utils import compare_upstream
+
+_DEGREE_ORDER = ("patch", "minor", "major")
+
+
+def _version_degree(oe_version: str, ext_version: str) -> str:
+    """Classify the lag by the leading version-segment difference.
+
+    Heuristic on the first three integer groups (epoch prefix stripped):
+    first segment differs -> major, second -> minor, otherwise patch.
+    Unparseable versions default to "minor" (the neutral middle).
+    """
+
+    def segments(v: str) -> list[int]:
+        v = v.split(":", 1)[-1]  # strip epoch "4:11.8.9"
+        return [int(x) for x in re.findall(r"\d+", v)[:3]]
+
+    a, b = segments(oe_version), segments(ext_version)
+    if not a or not b:
+        return "minor"
+    for i in range(max(len(a), len(b))):
+        sa = a[i] if i < len(a) else 0
+        sb = b[i] if i < len(b) else 0
+        if sa != sb:
+            return _DEGREE_ORDER[min(i, len(_DEGREE_ORDER) - 1)]
+    return "patch"
 
 
 def _row(distro: str, stream: str, version: str, *, date: str = "", source: str = "") -> VersionRow:
@@ -77,11 +106,9 @@ def _compute_lag(comp: Comparison) -> Comparison:
     oe_rows = [r for r in present if r.distro == "openEuler"]
     external = [r for r in present if r.distro not in ("openEuler", "upstream")]
 
-    oe_best = max(oe_rows, key=lambda r: compare_upstream(r.version, r.version) or 0) if oe_rows else None
-    if oe_rows:
-        oe_best = oe_rows[0]
-        for r in oe_rows[1:]:
-            oe_best = _newer(r, oe_best)
+    oe_best = None
+    for r in oe_rows:
+        oe_best = r if oe_best is None else _newer(r, oe_best)
 
     if external:
         newest_ext = external[0]
@@ -92,8 +119,10 @@ def _compute_lag(comp: Comparison) -> Comparison:
             comp.lagging = True
             comp.latest_upstream = newest_ext.version
             comp.latest_upstream_source = f"{newest_ext.distro} {newest_ext.stream}"
+            comp.lag_degree = _version_degree(oe_best.version, newest_ext.version)
             comp.lag_notes.append(
-                f"{newest_ext.distro} {newest_ext.stream} carries {newest_ext.version} vs openEuler {oe_best.version}."
+                f"{newest_ext.distro} {newest_ext.stream} carries {newest_ext.version} vs openEuler {oe_best.version}"
+                f" ({comp.lag_degree} lag)."
             )
 
     ubuntu_lts = next((r for r in present if r.stream == "ubuntu_LTS" and r.version), None)

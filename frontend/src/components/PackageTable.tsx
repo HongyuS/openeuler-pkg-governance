@@ -164,7 +164,7 @@ export function PackageTable(props: {
                 <td className="center"><span className={`badge b-${r.p_level}`}>{r.p_level}</span></td>
                 <td className="center"><span className={`badge b-${r.grade}`}>{r.grade}</span></td>
                 <td className="center">
-                  <span className={`prio ${prioCls(r.score)}`} title="治理优先级 = P级基础分(P0=4/P1=2.5/P2=1) + 落后基线+2 + 活跃度D+1.5/C+0.75 + 日落候选+1，满分 10">
+                  <span className={`prio ${prioCls(r.score)}`} title="治理优先级 = P级基础分(P0=4/P1=2.5/P2=1) + 落后基线分级(patch+0.5/minor+1.5/major+2.5，update/EPOL 回灌减免减半) + 活跃度D+1.5/C+0.75 + 日落候选+0.5，满分 10">
                     {r.score.toFixed(1)}
                   </span>
                 </td>

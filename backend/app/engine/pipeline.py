@@ -3,22 +3,28 @@
 from __future__ import annotations
 
 from app.engine import compare, disposal, effort, grading, importance, nodejs_gov, python_gov
+from app.engine.rules_loader import rules
 from app.models import Governance, Package, RepoSignals
 from app.utils import iso_today
 
 
-def _priority_score(gov: Governance, lagging: bool) -> float:
+def _priority_score(gov: Governance, *, lag_degree: str, backport: bool) -> float:
+    """Composite governance priority score (docs/scoring-v2.md D4–D6).
+
+    P-level base (P0=4/P1=2.5/P2=1) + lag bonus graded by ``lag_degree``
+    (halved when the package is actively backported via update/EPOL) +
+    maintenance risk (activity D/C). Sunset candidates already imply a D
+    grade, so their extra term is a small overlap (+0.5), not a full sum.
+    """
     base = {"P0": 4.0, "P1": 2.5, "P2": 1.0}.get(gov.p_level, 1.0)
-    score = base
-    if lagging:
-        score += 2.0
-    if gov.activity_grade == "D":
-        score += 1.5
-    elif gov.activity_grade == "C":
-        score += 0.75
+    cfg = rules().get("lag_bonus", {})
+    lag = float(cfg.get(lag_degree, 0.0)) if lag_degree else 0.0
+    if lag and backport:
+        lag *= float(cfg.get("backport_relief", 0.5))
+    risk = 1.5 if gov.activity_grade == "D" else 0.75 if gov.activity_grade == "C" else 0.0
     if gov.sunset_candidate:
-        score += 1.0
-    return round(min(10.0, score), 2)
+        risk += 0.5
+    return round(min(10.0, base + lag + risk), 2)
 
 
 def build_packages(
@@ -47,7 +53,9 @@ def build_packages(
     data_date = data_date or iso_today()
     sys_python = python_gov.system_python_version(inventory)
 
-    classifications = importance.classify(inventory)
+    # Base-ISO comps membership feeds the P1 derivation (docs/scoring-v2.md D8).
+    iso_baseline = {name for name, tags in iso_tags.items() if tags.get("baseline")}
+    classifications = importance.classify(inventory, iso_baseline=iso_baseline)
     # Packages whose dependency forces a language module to stay in the system
     # repo: core/key packages plus the system Python runtime closure.
     system_set = {
@@ -94,7 +102,10 @@ def build_packages(
         )
         # Effort.
         gov = effort.estimate(gov)
-        gov.score = _priority_score(gov, comp.lagging)
+        # Actively backported = carries updates in the update/EPOL repos
+        # (backport model, docs/scoring-v2.md D5).
+        backport = bool(rec.get("in_update") or rec.get("in_epol"))
+        gov.score = _priority_score(gov, lag_degree=comp.lag_degree, backport=backport)
 
         special_note = special.get(name, "")
         tags = iso_tags.get(name, {})
@@ -134,6 +145,6 @@ def build_packages(
             gov.maintenance_notes.append(
                 "基础 ISO 内置：官方交付组件，保留；退出需走 release-management 版本分支变更流程。"
             )
-            gov.score = _priority_score(gov, comp.lagging)
+            gov.score = _priority_score(gov, lag_degree=comp.lag_degree, backport=backport)
         packages.append(pkg)
     return packages

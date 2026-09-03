@@ -20,11 +20,11 @@ PPT（《RPM 包分级治理：月度活跃度 × AI 全量包画像 × 分层�
 
 | PPT 维度 | 平台实现 |
 | --- | --- |
-| ① 月度活跃度 | `engine/grading.py`：按月序列（提交·PR·Issue）做 1/3/6/12 月滚动加权 → A/B/C/D 分级；仓库待办（未闭环 Issue/PR） |
+| ① 月度活跃度 | `engine/grading.py`：按月序列（提交·PR·Issue）做 1/3/6/12 月滚动加权（对数刻度）+ 最近提交事件下限 → A/B/C/D 分级；仓库待办（未闭环 Issue/PR） |
 | ② AI 包画像 | `engine/importance.py`：活跃度 × 重要性 × 关键包（Python 依赖闭包）三维分类 → 核心/重要/普通 + P0/P1/P2；处置动作（升级优先/维持/合并/日落） |
 | ③ 人力估算 | `engine/effort.py`：人日/包 = 升级(3–10 人日×年发布) + CVE(0.5–2 人日×年 CVE) + 例行维护 → 汇总为团队容量 |
 | ④ HTML 输出 | `frontend/`：逐包画像、多维筛选排序、版本对比列、特殊包标识、活跃度趋势图 |
-| 分层更新波次 | P0 最小关键集合（kernel/glibc/openssl/systemd/python+闭包）→ P1 网络/存储/工具链 → P2 上层应用 |
+| 分层更新波次 | P0 最小关键集合（kernel/glibc/openssl/systemd + 包管理/引导栈 + python 闭包）→ P1 基础包（网络/存储/工具链 + 基础 ISO 内置 comps 派生 + 数据库/容器交付组件）→ P2 上层应用 |
 | 版本对比基准 | openEuler vs Ubuntu（LTS + 前沿 = interim），可选 SUSE（Tumbleweed / Leap·SLE）适配器 |
 | 特殊包 | DevStation 谷歌浏览器等上游版本从网络获取、独立快速更新通道打标 |
 
@@ -40,7 +40,7 @@ PPT（《RPM 包分级治理：月度活跃度 × AI 全量包画像 × 分层�
 | `api.gitcode.com/orgs/{org}/repos` | 全量源码仓库最近提交 | 分页取得 1 万+ 仓库的 `pushed_at` 填 “最近提交” 列 |
 | `archive.ubuntu.com/ubuntu` | Ubuntu LTS + 前沿基线 | 自动识别最新 LTS（26.04 resolute）与最新前沿（26.10 stonking）并解析 `Packages.gz` |
 | `pypi.org/pypi/{project}/json` | `python-*` pip 模块上游画像 | 最新版本、最近发布、`Requires-Python`、是否停更 |
-| `rules/governance_rules.yaml` | 治理规则 | P0/P1/P2、Python 依赖闭包、特殊包、版本滞后阈值、人力模型 |
+| `rules/governance_rules.yaml` | 治理规则 | P0/P1/P2、Python 依赖闭包、特殊包、落后分级加分（lag_bonus）、活跃度参数、人力模型 |
 
 > 采集是**可缓存、可恢复、限流友好**的：`build.py` 会把 repodata、Ubuntu、activity 分别缓存，
 > 重复执行只补增量。生产环境可用 `ACTIVITY_TOKEN` 提高 GitCode 限流水位。
@@ -152,7 +152,7 @@ make seed && make run
   （`python3dist(x)`/`npm(x)` 完整匹配，不可按 `(` 截断，否则整个语言生态塌缩成一个伪超级节点）；
   SONAME 剥版本标记保留架构后缀（`libcrypto.so.3(OPENSSL_3.0.0)(64bit)` → `libcrypto.so.3()(64bit)`）。
   Python 闭包 BFS 只沿 python 命名空间边扩展，避免经 libm→glibc→kernel 等真实但无关的边溢出半个发行版。
-- **活跃度分级**：月度序列（提交 + PR + Issue）指数衰减加权，1/3/6/12 月滚动 → A/B/C/D；
+- **活跃度分级**：月度序列（提交 + PR + Issue）指数衰减加权，1/3/6/12 月滚动，对数刻度 + 最近提交事件下限 → A/B/C/D；
   无实测数据不武断给 D，标记为“N/A（待采集）”。
 - **日落严格化**：仅当 D + 无反向依赖 + 非关键/非 Python 关键才建议日落，避免误杀有依赖的包。
 - **表格列**：保持原始列序（包名/分级/活跃度 → 4 个版本列 → 落后/处置/人日/反依赖/最近提交）；4 个版本列**横向滚动**，左右治理列**冻结**；去掉“重要性”与“P”的重复，只保留“分级”。

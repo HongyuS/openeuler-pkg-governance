@@ -31,15 +31,15 @@ export function DocsModal(props: { onClose: () => void }) {
 
           <h4>治理维度</h4>
           <ol>
-            <li><b>月度活跃度</b>：近 1/3/6/12 月滚动加权 → A/B/C/D；仓库待办（未闭环 Issue/PR）。</li>
-            <li><b>AI 全量包画像</b>：活跃度 × 重要性 × 关键包（Python 依赖闭包）→ 核心/重要/普通 + P0/P1/P2。</li>
+            <li><b>月度活跃度</b>：近 1/3/6/12 月滚动加权（对数刻度）+ 最近提交事件下限 → A/B/C/D；仓库待办（未闭环 Issue/PR）。</li>
+            <li><b>AI 全量包画像</b>：活跃度 × 重要性 × 关键包（Python 依赖闭包）→ 核心/重要/普通 + P0/P1/P2；落后基线按 patch/minor/major 分级计分。</li>
             <li><b>交互式输出</b>：逐包画像、多维筛选排序、版本对比列、特殊包标识、活跃度趋势。</li>
           </ol>
 
           <h4>分层更新波次</h4>
           <p>
-            <span className="badge b-p0">P0</span> 最小关键集合（kernel/glibc/openssl/systemd/python+闭包）优先对齐最新 release；
-            <span className="badge b-p1">P1</span> 网络/存储/工具链；
+            <span className="badge b-p0">P0</span> 最小关键集合（kernel/glibc/openssl/systemd + 包管理/引导栈 + python 闭包）优先对齐最新 release；
+            <span className="badge b-p1">P1</span> 基础包：网络/存储/工具链 + 基础 ISO 内置（comps 派生）+ 数据库/容器等交付组件；
             <span className="badge b-p2">P2</span> 上层应用最后。
           </p>
 

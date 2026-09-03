@@ -102,11 +102,22 @@ def _percentiles(values: list[int]) -> dict[str, int]:
     }
 
 
-def classify(inventory: dict[str, dict], *, closure: set[str] | None = None) -> dict[str, dict]:
-    """Return per-package classification metadata."""
+def classify(
+    inventory: dict[str, dict],
+    *,
+    closure: set[str] | None = None,
+    iso_baseline: set[str] | None = None,
+) -> dict[str, dict]:
+    """Return per-package classification metadata.
+
+    ``iso_baseline`` (packages selected by the base-install ISO comps groups)
+    unions the curated ``P1_base`` list: the ISO membership *is* the "what
+    ships" definition, mirroring Ubuntu seeds / Fedora comps (D8).
+    """
     cfg = rules()
     p0 = set(cfg.get("P0_critical", []))
     p1 = set(cfg.get("P1_base", []))
+    iso_base = iso_baseline or set()
     py_seeds = set(cfg.get("python_closure_seeds", []))
     provide_map = build_provide_map(inventory)
     reverse = build_require_graph(inventory, provide_map)
@@ -124,7 +135,7 @@ def classify(inventory: dict[str, dict], *, closure: set[str] | None = None) -> 
     for name in inventory:
         reverse_deps = rd.get(name, 0)
         is_critical = name in p0 or name in py_runtime
-        is_base = name in p1
+        is_base = name in p1 or name in iso_base
 
         if is_critical:
             p_level = "P0"

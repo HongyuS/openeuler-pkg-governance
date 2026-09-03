@@ -52,6 +52,7 @@ class Comparison:
 
     baselines: list[VersionRow] = field(default_factory=list)
     lagging: bool = False  # behind newest baseline
+    lag_degree: str = ""  # "" | patch | minor | major — leading version-segment difference
     lag_behind_ubuntu_lts: bool = False
     lag_behind_ubuntu_interim: bool = False
     latest_upstream: str = ""
