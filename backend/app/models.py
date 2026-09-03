@@ -101,6 +101,10 @@ class Package:
     in_epol: bool = False  # present in EPOL (extra packages)
     in_update: bool = False  # present in update (newest patch repo)
     latest_repo: str = ""  # repo holding the newest version
+    # Official ISO composition tags.
+    in_iso: bool = False  # inside the base-installation ISO (OS repo / DevStation list)
+    iso_baseline: bool = False  # explicitly selected by the oemaker comps groups
+    iso_excluded: bool = False  # explicitly excluded from the ISO by oemaker rpmlist
     # Python/pip assessment for pip-module source packages (python-*).
     python: dict[str, Any] = field(default_factory=dict)
     # Node.js/npm assessment for npm-module source packages (nodejs-*).

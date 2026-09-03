@@ -283,7 +283,9 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
     The binary version is the *newest* of OS / everything / EPOL / update; source
     availability comes from ``source``/``update/source``; debug info from
     ``debuginfo``. Returns ``{source: {version, repo, has_source, has_debug,
-    in_epol, in_update, arches, summary, license, provides, requires, reverse}}``.
+    in_os, in_epol, in_update, arches, summary, license, provides, requires,
+    reverse}}``. ``in_os`` marks presence in the OS repo, whose content matches
+    the Offline Standard (base installation) ISO.
     """
     desc = resolve_stream(stream_id)
     if not desc:
@@ -313,6 +315,7 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
                     "latest_repo": "",
                     "has_source": False,
                     "has_debug": False,
+                    "in_os": False,
                     "in_epol": False,
                     "in_update": False,
                     "arches": [],
@@ -329,6 +332,9 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
                 if cand and version_compare(cand, entry["version"]) > 0:
                     entry["version"] = cand
                     entry["latest_repo"] = spec["name"]
+                if spec["name"] == "OS":
+                    # OS repo == the Offline Standard (base installation) ISO.
+                    entry["in_os"] = True
                 if spec["name"] == "update":
                     entry["in_update"] = True
                 if spec["name"] == "EPOL":
@@ -401,6 +407,7 @@ def collect(streams: dict[str, str] | None = None) -> dict[str, dict]:
                     "requires": rec.get("requires", []),
                     "has_source": rec.get("has_source", False),
                     "has_debug": rec.get("has_debug", False),
+                    "in_os": rec.get("in_os", False),
                     "in_epol": rec.get("in_epol", False),
                     "in_update": rec.get("in_update", False),
                     "latest_repo": rec.get("latest_repo", ""),
@@ -411,7 +418,7 @@ def collect(streams: dict[str, str] | None = None) -> dict[str, dict]:
             ver = rec.get("version", "")
             if ver and version_compare(ver, best.get(name, "")) > 0:
                 best[name] = ver
-                for k in ("has_source", "has_debug", "in_epol", "in_update"):
+                for k in ("has_source", "has_debug", "in_os", "in_epol", "in_update"):
                     entry[k] = rec.get(k, False)
                 entry["latest_repo"] = rec.get("latest_repo", "")
             for a in rec.get("arches", []):

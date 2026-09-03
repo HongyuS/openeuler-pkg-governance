@@ -97,6 +97,13 @@ node_toolchain:
   - "corepack"
   - "bun"
 
+# Sunset protection: packages inside the base-installation ISO are official
+# deliverables (users install them directly, so reverse_deps cannot see the
+# usage). Their removal must go through the release-management branch process
+# instead of an automatic sunset recommendation.
+sunset_protection:
+  iso_baseline: true
+
 # Special / unusual packages that must follow an independent fast-update channel.
 # Version info for these is fetched from the network rather than the OS repo.
 special_packages:

@@ -49,7 +49,7 @@ PPT（《RPM 包分级治理：月度活跃度 × AI 全量包画像 × 分层�
 
 ## 架构
 
-```
+```text
 pkg-governance/
 ├── backend/
 │   ├── app/

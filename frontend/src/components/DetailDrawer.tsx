@@ -67,6 +67,9 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
         <span className={`badge b-${g.activity_grade}`}>活跃度 {g.activity_grade}</span>
         {d.special ? <span className="tag">DevStation 特殊包</span> : ""}
         {g.sunset_candidate ? <span className="tag">日落候选</span> : ""}
+        {d.in_iso ? <span className="tag" title="基础安装 ISO 内置：官方交付组件，退出需走 release-management 变更流程">ISO 内置</span> : ""}
+        {d.iso_baseline ? <span className="tag" title="oemaker comps 组明确纳入（mandatory/default）">ISO 精选</span> : ""}
+        {d.iso_excluded ? <span className="tag" title="oemaker rpmlist 明确排除出基础 ISO">ISO 排除</span> : ""}
       </div>
       <div className="grid">
         <div className="cell"><div className="k">反向依赖</div><div className="v">{g.reverse_deps}</div></div>
@@ -88,6 +91,7 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
         <h4>仓库可用性</h4>
         <div className="muted">
           版本来源：{d.latest_repo || "—"}
+          {d.in_iso ? " · 基础 ISO 内置" : ""}
           {d.has_source ? " · 源码(source)" : ""}
           {d.has_debug ? " · 调试(debuginfo)" : ""}
           {d.in_epol ? " · EPOL" : ""}

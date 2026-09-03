@@ -31,7 +31,7 @@ sys.path.insert(0, str(BACKEND))
 os.environ.setdefault("PYTHONPATH", str(BACKEND))
 
 from app import config  # noqa: E402
-from app.collectors import gitcode, npm, openeuler, pypi, repos, ubuntu  # noqa: E402
+from app.collectors import gitcode, npm, oemaker, openeuler, pypi, repos, ubuntu  # noqa: E402
 from app.engine import pipeline  # noqa: E402
 from app.utils import LOG, setup_logging  # noqa: E402
 
@@ -65,6 +65,7 @@ def main() -> None:
     ap.add_argument("--no-activity", action="store_true")
     ap.add_argument("--no-pypi", action="store_true")
     ap.add_argument("--no-npm", action="store_true")
+    ap.add_argument("--no-oemaker", action="store_true")
     ap.add_argument("--activity-limit", type=int, default=config.ACTIVITY_SAMPLE_LIMIT)
     args = ap.parse_args()
 
@@ -100,6 +101,15 @@ def main() -> None:
     inventory = openeuler.collect(default)
     LOG.info("canonical inventory: %d source packages", len(inventory))
     _write(config.CACHE_DIR / "inventory.json", {"streams": default, "packages": inventory})
+
+    # 2.5) Official ISO composition lists (oemaker, per release branch).
+    iso_tags: dict[str, dict] = {}
+    if not args.no_oemaker:
+        LOG.info("collecting official ISO package lists (oemaker)…")
+        try:
+            iso_tags = oemaker.collect(default).get("tags", {})
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("oemaker collection failed: %s", exc)
 
     # 3) Ubuntu baseline.
     LOG.info("collecting Ubuntu baseline versions…")
@@ -145,6 +155,8 @@ def main() -> None:
         special=special,
         pypi_profiles=pypi_profiles,
         npm_profiles=npm_profiles,
+        iso_tags=iso_tags,
+        iso_protection=bool(rules.get("sunset_protection", {}).get("iso_baseline", False)),
     )
 
     meta: dict[str, Any] = {

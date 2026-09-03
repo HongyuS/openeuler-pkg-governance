@@ -42,6 +42,7 @@ export function PackageTable(props: {
   const [disposal, setDisposal] = useState("");
   const [lag, setLag] = useState(false);
   const [sunset, setSunset] = useState(false);
+  const [inIso, setInIso] = useState(false);
   const [measured, setMeasured] = useState(false);
   const [sort, setSort] = useState<SortKey>("score");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
@@ -68,6 +69,7 @@ export function PackageTable(props: {
     if (disposal) rows = rows.filter((r) => r.disposal === disposal);
     if (lag) rows = rows.filter((r) => r.lagging);
     if (sunset) rows = rows.filter((r) => r.sunset_candidate);
+    if (inIso) rows = rows.filter((r) => r.in_iso);
     if (measured) rows = rows.filter((r) => r.grade !== "N/A");
     const dir = order === "asc" ? 1 : -1;
     rows.sort((a, b) => {
@@ -83,7 +85,7 @@ export function PackageTable(props: {
       }
     });
     return rows;
-  }, [props.packages, deferredQ, p, grade, disposal, lag, sunset, measured, sort, order]);
+  }, [props.packages, deferredQ, p, grade, disposal, lag, sunset, inIso, measured, sort, order]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / per));
   const cur = Math.min(page, pages);
@@ -116,6 +118,7 @@ export function PackageTable(props: {
           options={[{ id: "", label: "建议（全部）" }, { id: "upgrade", label: "升级" }, { id: "maintain", label: "维持" }, { id: "sunset", label: "日落" }]} />
         <label className="ck"><input type="checkbox" checked={lag} onChange={(e) => { setLag(e.target.checked); setPage(1); }} /> 基线滞后</label>
         <label className="ck"><input type="checkbox" checked={sunset} onChange={(e) => { setSunset(e.target.checked); setPage(1); }} /> 日落候选</label>
+        <label className="ck" title="基础安装 ISO 内置（官方交付组件）"><input type="checkbox" checked={inIso} onChange={(e) => { setInIso(e.target.checked); setPage(1); }} /> ISO 内置</label>
         <label className="ck"><input type="checkbox" checked={measured} onChange={(e) => { setMeasured(e.target.checked); setPage(1); }} /> 已测活跃度</label>
         <span className="total-inline">共 {filtered.length.toLocaleString()} 条</span>
       </div>
@@ -211,6 +214,7 @@ function RepoTag(props: { row: PackageRow }) {
   const tags: string[] = [];
   if (py) tags.push("pip");
   if (npm) tags.push("npm");
+  if (r.in_iso) tags.push("ISO");
   if (r.in_update) tags.push("update");
   if (r.in_epol) tags.push("EPOL");
   if (r.has_debug) tags.push("debug");

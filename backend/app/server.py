@@ -278,6 +278,9 @@ def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
                 "in_epol": r["in_epol"],
                 "in_update": r["in_update"],
                 "latest_repo": r["latest_repo"],
+                "in_iso": p.get("in_iso", False),
+                "iso_baseline": p.get("iso_baseline", False),
+                "iso_excluded": p.get("iso_excluded", False),
                 "python": {
                     k: p.get("python", {}).get(k, "")
                     for k in (

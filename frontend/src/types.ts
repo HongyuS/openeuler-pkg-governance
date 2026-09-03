@@ -34,6 +34,9 @@ export interface PackageRow {
   in_epol: boolean;
   in_update: boolean;
   latest_repo: string;
+  in_iso: boolean;
+  iso_baseline: boolean;
+  iso_excluded: boolean;
   python: {
     kind: string;
     pypi_name: string;
@@ -128,6 +131,9 @@ export interface PackageDetail {
   in_epol: boolean;
   in_update: boolean;
   latest_repo: string;
+  in_iso: boolean;
+  iso_baseline: boolean;
+  iso_excluded: boolean;
   python: {
     kind: string;
     pypi_name: string;

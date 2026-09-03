@@ -17,8 +17,8 @@ dev = ["ruff>=0.6", "mypy>=1.10", "types-requests", "types-PyYAML"]
 [project.scripts]
 pkg-gov-api = "app.server:run"
 
-[tool.setuptools]
-packages = ["app"]
+[tool.setuptools.packages.find]
+where = ["backend"]
 
 [tool.ruff]
 line-length = 100
