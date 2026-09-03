@@ -15,6 +15,7 @@ source-package inventory for a single stream, so the UI can switch freely.
 
 from __future__ import annotations
 
+import operator
 import re
 
 from app import config
@@ -23,21 +24,19 @@ from app.utils import LOG, http_get, version_compare
 
 LTS_RE = re.compile(r"^openEuler-(?P<ver>\d+\.\d+)-LTS(?:-SP(?P<sp>\d+))?$")
 INNOV_RE = re.compile(r"^openEuler-(?P<ver>\d+\.\d+)(?:-DevStation)?$")
-IGNORE = re.compile(r"(preview|Embedded|debug|source|RISC|loong|ARM64|X86)", re.I)
+IGNORE = re.compile(r"(preview|Embedded|debug|source|RISC|loong|ARM64|X86)", re.IGNORECASE)
 
 
 def _match(pattern: re.Pattern[str], s: str) -> re.Match[str]:
     """Match a stream name already filtered by ``pattern`` (asserts for mypy)."""
     m = pattern.match(s)
-    assert m, s
+    assert m, s  # ruff: ignore[assert] — 契约断言：mypy narrowing 助手（AGENTS.md 规定的 _match 语义）
     return m
 
 
 def _iter_releases() -> list[str]:
     resp = http_get(config.OPEN_EULER_MIRROR + "/", timeout=30)
-    return sorted(
-        {m.group(1).strip("/") for m in re.finditer(r'href="(openEuler-[^"/]+)/?"', resp.text)}
-    )
+    return sorted({m.group(1).strip("/") for m in re.finditer(r'href="(openEuler-[^"/]+)/?"', resp.text)})
 
 
 def _ver_key(ver: str) -> tuple:
@@ -81,28 +80,27 @@ def _iter_dailybuild_innovation() -> list[str]:
     """All EBS-openEuler-<ver>(-DevStation) releases on the daily-build host."""
     try:
         resp = http_get(config.OPEN_EULER_DAILYBUILD + "/", timeout=20)
-        entries = {e for e in re.findall(r'href="(EBS-openEuler-[^"/]+)/"', resp.text)}
-    except Exception:  # noqa: BLE001
+        entries = set(re.findall(r'href="(EBS-openEuler-[^"/]+)/"', resp.text))
+    except Exception:  # ruff: ignore[blind-except]
         return []
     out = []
     for entry in entries:
-        release = entry[len("EBS-") :] if entry.startswith("EBS-") else entry
+        release = entry.removeprefix("EBS-")
         if INNOV_RE.match(release) and not IGNORE.search(entry):
             out.append(release)
     return sorted(out, key=lambda r: _ver_key(_match(INNOV_RE, r).group("ver")))
 
 
 def _kernel_variants(build_url: str, ver: str) -> list[str]:
-    """Kernel variants nested under a build dir (``<ver>-with-kernel-<k>/``),
-    baseline (lowest version) first."""
+    """Kernel variants nested under a build dir (``<ver>-with-kernel-<k>/``).
+
+    Baseline (lowest version) first.
+    """
     try:
         resp = http_get(f"{build_url}/", timeout=20)
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         return []
-    found = {
-        m.group(1)
-        for m in re.finditer(rf'href="{re.escape(ver)}-with-kernel-([0-9.]+)/"', resp.text)
-    }
+    found = {m.group(1) for m in re.finditer(rf'href="{re.escape(ver)}-with-kernel-([0-9.]+)/"', resp.text)}
     return sorted(found, key=lambda k: tuple(int(x) for x in k.split(".")))
 
 
@@ -115,7 +113,7 @@ def _iter_devstation_builds() -> list[dict]:
     idx_url = f"{config.OPEN_EULER_DAILYBUILD}/EBS-{release}/"
     try:
         resp = http_get(idx_url, timeout=30)
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         return []
     dirs = re.findall(r'href="([A-Za-z0-9_.-]+)/"', resp.text)
     rcs: list[tuple[int, str]] = []
@@ -189,8 +187,7 @@ def stream_catalog(family: str | None = None) -> list[dict]:
         streams.append(
             {
                 "id": release,
-                "label": f"openEuler {m.group('ver')}"
-                + (" DevStation" if "-DevStation" in release else ""),
+                "label": f"openEuler {m.group('ver')}" + (" DevStation" if "-DevStation" in release else ""),
                 "kind": "innovation",
                 "release": release,
                 "base": f"{config.OPEN_EULER_MIRROR}/{release}",
@@ -198,21 +195,21 @@ def stream_catalog(family: str | None = None) -> list[dict]:
                 "date": "",
             }
         )
-    for b in _iter_devstation_builds():
-        streams.append(
-            {
-                "id": b["id"],
-                "label": b["label"],
-                "kind": "innovation",
-                "release": b["id"],
-                "base": b["base"],
-                "source": "dailybuild",
-                "date": b["date"],
-                "rc": b.get("rc", False),
-                "kernel": b.get("kernel", ""),
-                "baseline": b.get("baseline", False),
-            }
-        )
+    streams.extend(
+        {
+            "id": b["id"],
+            "label": b["label"],
+            "kind": "innovation",
+            "release": b["id"],
+            "base": b["base"],
+            "source": "dailybuild",
+            "date": b["date"],
+            "rc": b.get("rc", False),
+            "kernel": b.get("kernel", ""),
+            "baseline": b.get("baseline", False),
+        }
+        for b in _iter_devstation_builds()
+    )
     return streams
 
 
@@ -233,7 +230,7 @@ def discover_latest() -> dict[str, str]:
         if rc:
             best_innov_id = next((s["id"] for s in reversed(rc) if s.get("baseline")), rc[-1]["id"])
         else:
-            best_innov_id = sorted(devstation, key=lambda s: s["date"], reverse=True)[0]["id"]
+            best_innov_id = max(devstation, key=operator.itemgetter("date"))["id"]
     return {
         "openEuler_LTS": lts[-1]["id"] if lts else "",
         "openEuler_innovation": best_innov_id,
@@ -248,36 +245,39 @@ def _find_repomd(base: str) -> str | None:
     for spec in config.REPO_SOURCES:
         if spec["kind"] != "binary":
             continue
-        url = _repomd_for(base, spec)
+        url = repomd_for(base, spec)
         if url:
             return url
     return None
 
 
-def _repomd_for(base: str, spec: dict, arch: str | None = None) -> str | None:
-    """Return a working repomd.xml URL for a repo spec, or None. The kernel
-    variant (if any) is already encoded in ``base`` by the stream catalogue."""
+def repomd_for(base: str, spec: dict, arch: str | None = None) -> str | None:
+    """Return a working repomd.xml URL for a repo spec, or None.
+
+    The kernel variant (if any) is already encoded in ``base`` by the stream catalogue.
+    """
     arch = arch or config.OPEN_EULER_ARCH
-    if spec["kind"] in ("source",):
+    if spec["kind"] == "source":
         url = f"{base}/{spec['path']}/repodata/repomd.xml"
     else:
         url = f"{base}/{spec['path']}/{arch}/repodata/repomd.xml"
     try:
         if http_get(url, timeout=12).status_code == 200:
             return url
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         pass
     return None
 
 
 def resolve_stream(stream_id: str) -> dict | None:
+    """Return the stream catalogue entry with the given id, or None."""
     for s in stream_catalog():
         if s["id"] == stream_id:
             return s
     return None
 
 
-def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str, dict]:
+def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str, dict]:  # ruff: ignore[complex-structure] — 多仓库/多格式 repomd 兼容解析，分支多属预期，拆分风险高于收益
     """Aggregate every default repo of a stream into one source inventory.
 
     The binary version is the *newest* of OS / everything / EPOL / update; source
@@ -294,7 +294,7 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
     src_cache = config.REPO_META_CACHE / stream_id.replace("/", "_")
 
     for spec in config.REPO_SOURCES:
-        url = _repomd_for(desc["base"], spec)
+        url = repomd_for(desc["base"], spec)
         if not url:
             LOG.info("repo %s not present for %s", spec["name"], stream_id)
             continue
@@ -303,7 +303,7 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
             # source/debug repos only need presence + version, so parse lightly.
             parse_full = full and spec["kind"] == "binary"
             src = repodata_parser.collect_release(url, src_cache, light=not parse_full)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("repo %s failed for %s: %s", spec["name"], stream_id, exc)
             continue
         for name, rec in src.items():
@@ -362,8 +362,11 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
 
 
 def collect_stream_versions(stream_id: str) -> dict[str, dict]:
-    """Per-stream version + repo tags: {source: {version, latest_repo, in_epol,
-    in_update, has_source, has_debug}} (aggregated, light)."""
+    """Per-stream version + repo tags.
+
+    {source: {version, latest_repo, in_epol,
+    in_update, has_source, has_debug}} (aggregated, light).
+    """
     inv = collect_stream_inventory(stream_id, full=False)
     return {
         name: {
@@ -390,7 +393,7 @@ def collect(streams: dict[str, str] | None = None) -> dict[str, dict]:
     for stream_name, stream_id in streams.items():
         try:
             src = collect_stream_inventory(stream_id, full=True)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("failed collecting %s (%s): %s", stream_name, stream_id, exc)
             continue
         for name, rec in src.items():

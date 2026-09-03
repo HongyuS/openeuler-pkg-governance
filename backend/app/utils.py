@@ -14,6 +14,7 @@ LOG = logging.getLogger("pkg.gov")
 
 
 def setup_logging(level: int = logging.INFO) -> None:
+    """Configure root logging with a timestamped console format."""
     logging.basicConfig(
         level=level,
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
@@ -68,7 +69,7 @@ def version_compare(a: str, b: str) -> int:
     """Return -1/0/1 if a is <, ==, > b (never raises)."""
     try:
         pa, pb = parse_version(a), parse_version(b)
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         return (a > b) - (a < b)
     return (pa > pb) - (pa < pb)
 
@@ -79,8 +80,10 @@ def compare_versions_str(a: str, b: str) -> int:
 
 
 def upstream_version(version: str) -> str:
-    """Return only the epoch:version portion (upstream), dropping the distro
-    release suffix so cross-distribution comparisons are meaningful."""
+    """Return only the epoch:version portion (upstream).
+
+    Dropping the distro release suffix so cross-distribution comparisons are meaningful.
+    """
     if not version:
         return ""
     text = str(version).strip()
@@ -104,7 +107,7 @@ def compare_upstream(a: str, b: str) -> int:
     try:
         pa = parse_version(upstream_version(a))
         pb = parse_version(upstream_version(b))
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         return (a > b) - (a < b)
     return (pa[:2] > pb[:2]) - (pa[:2] < pb[:2])
 
@@ -117,6 +120,7 @@ def strip_source_suffix(version: str) -> str:
 
 
 def iso_today() -> str:
+    """Return today's date as an ISO-8601 string."""
     return dt.date.today().isoformat()
 
 
@@ -130,13 +134,14 @@ def parse_date(value: str) -> dt.date | None:
     text = text.replace("Z", "").split("T")[0]
     for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y.%m.%d", "%Y-%m", "%m/%d/%Y"):
         try:
-            return dt.datetime.strptime(text, fmt).date()
+            return dt.datetime.strptime(text, fmt).date()  # ruff: ignore[call-datetime-strptime-without-zone] — 刻意取 naive date，日期粒度无时区语义
         except ValueError:
             continue
     return None
 
 
 def days_between(later: str, earlier: str) -> int | None:
+    """Return the day difference between two parseable dates, or None."""
     a, b = parse_date(later), parse_date(earlier)
     if a and b:
         return (a - b).days
@@ -144,6 +149,7 @@ def days_between(later: str, earlier: str) -> int | None:
 
 
 def days_since(value: str, ref: str | None = None) -> int | None:
+    """Return days elapsed since ``value`` up to ``ref`` (default today), or None."""
     ref = ref or iso_today()
     return days_between(ref, value)
 
@@ -162,24 +168,26 @@ def http_get(
 
                 time.sleep(1.0 + attempt)
                 continue
-            return resp
-        except requests.RequestException as exc:  # noqa: BLE001
+        except requests.RequestException as exc:
             last_exc = exc
             if attempt == 0:
                 import time
 
                 time.sleep(0.5)
                 continue
+        else:
+            return resp
     if last_exc:
         raise last_exc
     return requests.Response()
 
 
 def json_or_none(resp: requests.Response, *, limit: int = 0) -> Any:
+    """Return the response JSON (lists trimmed to ``limit``), or None on parse failure."""
     try:
         data = resp.json()
-        if limit and isinstance(data, list):
-            return data[:limit]
-        return data
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         return None
+    if limit and isinstance(data, list):
+        return data[:limit]
+    return data

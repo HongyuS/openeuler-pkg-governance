@@ -58,6 +58,7 @@ def _pep440_satisfied(requires_python: str, current: str) -> bool:
 
 
 def system_python_version(inventory: dict[str, dict]) -> str:
+    """Return the system python3 version from the inventory, cleaned."""
     py3 = inventory.get("python3", {})
     # Canonical inventory stores versions keyed by stream (openEuler_LTS/innovation).
     versions = py3.get("versions", {})
@@ -71,7 +72,6 @@ def system_python_version(inventory: dict[str, dict]) -> str:
 
 def apply_python(
     pkg: Package,
-    inventory: dict[str, dict],
     pypi_profiles: dict[str, dict],
     sys_python: str,
     system_set: set[str] | None = None,
@@ -83,9 +83,7 @@ def apply_python(
 
     prof = pypi_profiles.get(name, {}) or {}
     sys_major_minor = ".".join(str(v) for v in _num(sys_python)[:2]) if sys_python else ""
-    compat_ok = _pep440_satisfied(
-        prof.get("pypi_requires_python", ""), sys_major_minor or sys_python
-    )
+    compat_ok = _pep440_satisfied(prof.get("pypi_requires_python", ""), sys_major_minor or sys_python)
 
     note = []
     if prof.get("pypi_stale"):
@@ -130,13 +128,9 @@ def apply_python(
         return shown + ("…" if len(names) > 5 else "")
 
     if sys_deps:
-        gov.maintenance_notes.append(
-            f"被系统/关键包 [{_fmt(sys_deps)}] 依赖：保留在系统源并优先对齐上游。"
-        )
+        gov.maintenance_notes.append(f"被系统/关键包 [{_fmt(sys_deps)}] 依赖：保留在系统源并优先对齐上游。")
         if prof.get("pypi_stale"):
-            gov.maintenance_notes.append(
-                "Python/pip 模块：PyPI 上游停更，但仍被系统包依赖，需维持并评估替代。"
-            )
+            gov.maintenance_notes.append("Python/pip 模块：PyPI 上游停更，但仍被系统包依赖，需维持并评估替代。")
     elif other_deps:
         gov.maintenance_notes.append(
             f"仅被非关键包 [{_fmt(other_deps)}] 依赖：通告并敦促依赖方维护者转向 "
@@ -144,9 +138,7 @@ def apply_python(
             "过渡期后退出系统源。"
         )
         if prof.get("pypi_stale"):
-            gov.maintenance_notes.append(
-                "Python/pip 模块：PyPI 上游停更，但仍被依赖，需维持并评估替代。"
-            )
+            gov.maintenance_notes.append("Python/pip 模块：PyPI 上游停更，但仍被依赖，需维持并评估替代。")
     else:
         gov.disposal = "sunset"
         gov.sunset_candidate = True

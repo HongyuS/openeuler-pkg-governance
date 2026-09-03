@@ -150,7 +150,7 @@ def fetch_activity(pkg: str, *, org: str | None = None, repo: str | None = None)
         for mk, n in prs_monthly.items():
             m = monthly.setdefault(mk, {"commits": 0, "prs": 0, "issues": 0})
             m["prs"] += n
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         pass
     try:
         open_issues, closed_issues, iss_monthly = _backlog_and_buckets(org, repo, "issues")
@@ -159,7 +159,7 @@ def fetch_activity(pkg: str, *, org: str | None = None, repo: str | None = None)
         for mk, n in iss_monthly.items():
             m = monthly.setdefault(mk, {"commits": 0, "prs": 0, "issues": 0})
             m["issues"] += n
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         pass
     signals.monthly = monthly
     return signals
@@ -188,7 +188,7 @@ def collect_many(
                 # retried on the next run.
                 if sig.get("source") != "none" or sig.get("monthly") or sig.get("last_commit"):
                     cached[name] = RepoSignals(**sig)
-        except Exception:  # noqa: BLE001
+        except Exception:  # ruff: ignore[blind-except]
             cached = {}
 
     todo = [p for p in packages if p not in cached]
@@ -203,7 +203,7 @@ def collect_many(
         try:
             repo = resolve(pkg) if resolve else None
             return pkg, fetch_activity(pkg, repo=repo)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("activity failed for %s: %s", pkg, exc)
             return pkg, RepoSignals(source="none")
 
@@ -226,5 +226,5 @@ def collect_many(
 
 def _write_cache(cache: Path, data: dict) -> None:
     cache.parent.mkdir(parents=True, exist_ok=True)
-    serialisable = {k: {kk: vv for kk, vv in v.__dict__.items()} for k, v in data.items()}
-    cache.write_text(json.dumps(serialisable, ensure_ascii=False, indent=2))
+    serialisable = {k: dict(v.__dict__.items()) for k, v in data.items()}
+    cache.write_text(json.dumps(serialisable, ensure_ascii=False, indent=2), encoding="utf-8")

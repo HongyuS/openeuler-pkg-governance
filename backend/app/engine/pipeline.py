@@ -70,7 +70,7 @@ def build_packages(
         )
         signals = activity.get(name, RepoSignals(source="none"))
         comp = compare.build_comparison(name, rec.get("versions", {}), baselines)
-        letter, idx, scores = grading.grade(signals)
+        letter, _idx, scores = grading.grade(signals)
 
         gov = Governance(
             importance=cls["importance"],
@@ -88,7 +88,6 @@ def build_packages(
             gov,
             grade=letter,
             activity_source=gov.activity_source,
-            lagging=comp.lagging,
             last_commit=signals.last_commit,
             open_issues=signals.open_issues,
             open_prs=signals.open_prs,
@@ -123,7 +122,7 @@ def build_packages(
             special_note=special_note,
             data_date=data_date,
         )
-        pkg = python_gov.apply_python(pkg, inventory, pypi_profiles, sys_python, system_set)
+        pkg = python_gov.apply_python(pkg, pypi_profiles, sys_python, system_set)
         pkg = nodejs_gov.apply_nodejs(pkg, system_set, npm_profiles)
         # ISO protection overrides any sunset recommendation (structural, pip
         # or npm module): base-ISO components are officially delivered, so

@@ -30,23 +30,29 @@ BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 os.environ.setdefault("PYTHONPATH", str(BACKEND))
 
-from app import config  # noqa: E402
-from app.collectors import gitcode, npm, oemaker, openeuler, pypi, repos, ubuntu  # noqa: E402
-from app.engine import pipeline  # noqa: E402
-from app.utils import LOG, setup_logging  # noqa: E402
+from app import config  # ruff: ignore[module-import-not-at-top-of-file]
+from app.collectors import (  # ruff: ignore[module-import-not-at-top-of-file]
+    gitcode,
+    npm,
+    oemaker,
+    openeuler,
+    pypi,
+    repos,
+    ubuntu,
+)
+from app.engine import pipeline  # ruff: ignore[module-import-not-at-top-of-file]
+from app.utils import LOG, setup_logging  # ruff: ignore[module-import-not-at-top-of-file]
 
 setup_logging()
 
 
 def pick_activity_targets(inventory: dict[str, dict], limit: int) -> list[str]:
-    """Priority-ordered activity targets: P0/P1/special packages first, then
-    everything else, so an interrupted run still covers the important repos."""
+    """Priority-ordered activity targets: P0/P1/special packages first.
+
+    Then everything else, so an interrupted run still covers the important repos.
+    """
     rules = __import__("app").engine.rules_loader.rules()
-    p0 = {
-        p
-        for p in set(rules.get("P0_critical", [])) | set(rules.get("python_closure_seeds", []))
-        if p in inventory
-    }
+    p0 = {p for p in set(rules.get("P0_critical", [])) | set(rules.get("python_closure_seeds", [])) if p in inventory}
     p1 = {p for p in rules.get("P1_base", []) if p in inventory}
     special = {s["name"] for s in rules.get("special_packages", []) if s.get("name") in inventory}
     selected: list[str] = []
@@ -61,6 +67,7 @@ def pick_activity_targets(inventory: dict[str, dict], limit: int) -> list[str]:
 
 
 def main() -> None:
+    """Run the full collection + governance pipeline and write packages.json."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-activity", action="store_true")
     ap.add_argument("--no-pypi", action="store_true")
@@ -80,7 +87,7 @@ def main() -> None:
     if sv_cache.exists():
         try:
             stream_versions = json.loads(sv_cache.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
+        except Exception:  # ruff: ignore[blind-except]
             stream_versions = {}
     for s in catalog:
         sid = s["id"]
@@ -90,7 +97,7 @@ def main() -> None:
         LOG.info("collecting stream versions for %s …", sid)
         try:
             stream_versions[sid] = openeuler.collect_stream_versions(sid)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("stream %s failed: %s", sid, exc)
             stream_versions[sid] = {}
     sv_cache.parent.mkdir(parents=True, exist_ok=True)
@@ -108,7 +115,7 @@ def main() -> None:
         LOG.info("collecting official ISO package lists (oemaker)…")
         try:
             iso_tags = oemaker.collect(default).get("tags", {})
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("oemaker collection failed: %s", exc)
 
     # 3) Ubuntu baseline.
@@ -117,12 +124,8 @@ def main() -> None:
     ub_versions = ubuntu_data["versions"]
     # Slim ubuntu maps to only packages present in the openEuler inventory.
     slim = {
-        "ubuntu_LTS": {
-            k: v for k, v in ub_versions.get("ubuntu_LTS", {}).items() if k in inventory
-        },
-        "ubuntu_interim": {
-            k: v for k, v in ub_versions.get("ubuntu_interim", {}).items() if k in inventory
-        },
+        "ubuntu_LTS": {k: v for k, v in ub_versions.get("ubuntu_LTS", {}).items() if k in inventory},
+        "ubuntu_interim": {k: v for k, v in ub_versions.get("ubuntu_interim", {}).items() if k in inventory},
     }
 
     # 4) Activity (full scan by default; cache makes reruns incremental).
@@ -199,7 +202,7 @@ def main() -> None:
 
 def _write(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__":

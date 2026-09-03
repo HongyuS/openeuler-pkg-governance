@@ -9,6 +9,7 @@ real upstream activity.
 
 from __future__ import annotations
 
+import operator
 import re
 import zlib
 
@@ -46,6 +47,7 @@ def _ver_key(meta: dict) -> tuple:
 
 
 def discover_baselines() -> tuple[str, str]:
+    """Return the (latest LTS, latest interim) Ubuntu codenames from the archive index."""
     resp = http_get(config.UBUNTU_ARCHIVE + "/dists/", timeout=30)
     codenames = {m.group("codename") for m in CODEPAT.finditer(resp.text)}
     lts: list[tuple[str, tuple]] = []
@@ -61,16 +63,13 @@ def discover_baselines() -> tuple[str, str]:
             lts.append((cn, key))
         else:
             interim.append((cn, key))
-    lts.sort(key=lambda x: x[1])
-    interim.sort(key=lambda x: x[1])
+    lts.sort(key=operator.itemgetter(1))
+    interim.sort(key=operator.itemgetter(1))
     return (lts[-1][0] if lts else ""), (interim[-1][0] if interim else "")
 
 
 def _packages_url(codename: str, component: str) -> str:
-    return (
-        f"{config.UBUNTU_ARCHIVE}/dists/{codename}/{component}/"
-        f"binary-{config.UBUNTU_ARCH}/Packages.gz"
-    )
+    return f"{config.UBUNTU_ARCHIVE}/dists/{codename}/{component}/binary-{config.UBUNTU_ARCH}/Packages.gz"
 
 
 def _iter_packages(codename: str) -> dict[str, dict]:
@@ -84,7 +83,7 @@ def _iter_packages(codename: str) -> dict[str, dict]:
             continue
         try:
             text = zlib.decompress(resp.content, 16 + zlib.MAX_WBITS).decode("utf-8", "ignore")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("could not decompress %s: %s", url, exc)
             continue
         for block in re.split(r"\n\n", text):
@@ -116,7 +115,7 @@ def collect(baselines: tuple[str, str] | None = None) -> dict[str, dict]:
     if config.UBUNTU_CACHE.exists() and baselines is None:
         try:
             return json.loads(config.UBUNTU_CACHE.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
+        except Exception:  # ruff: ignore[blind-except]
             pass
 
     if not baselines:
@@ -139,6 +138,6 @@ def collect(baselines: tuple[str, str] | None = None) -> dict[str, dict]:
     try:
         config.UBUNTU_CACHE.parent.mkdir(parents=True, exist_ok=True)
         config.UBUNTU_CACHE.write_text(json.dumps(result, ensure_ascii=False))
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         pass
     return result

@@ -47,9 +47,7 @@ def build_provide_map(inventory: dict[str, dict]) -> dict[str, set[str]]:
     return pmap
 
 
-def build_require_graph(
-    inventory: dict[str, dict], provide_map: dict[str, set[str]]
-) -> dict[str, set[str]]:
+def build_require_graph(inventory: dict[str, dict], provide_map: dict[str, set[str]]) -> dict[str, set[str]]:
     """Build the package -> {dependent sources} reverse graph."""
     reverse: dict[str, set[str]] = {}
     for name, rec in inventory.items():
@@ -61,15 +59,16 @@ def build_require_graph(
 
 
 def _is_python_edge(key: str) -> bool:
-    """Only follow Python-namespaced capabilities, otherwise the closure BFS
+    """Only follow Python-namespaced capabilities.
+
+    Otherwise the closure BFS
     spills into half the distro via real but irrelevant edges
-    (python3 -> libm -> glibc -> kernel -> llvm -> numpy; bash -> info -> texlive -> R)."""
+    (python3 -> libm -> glibc -> kernel -> llvm -> numpy; bash -> info -> texlive -> R).
+    """
     return key.startswith(("python", "/usr/bin/python", "/usr/lib/python"))
 
 
-def python_closure(
-    inventory: dict[str, dict], provide_map: dict[str, set[str]] | None = None
-) -> set[str]:
+def python_closure(inventory: dict[str, dict], provide_map: dict[str, set[str]] | None = None) -> set[str]:
     """BFS the Python dependency closure from the seed packages."""
     provide_map = provide_map or build_provide_map(inventory)
     seeds = rules().get("python_closure_seeds", [])

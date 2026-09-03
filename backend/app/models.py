@@ -30,9 +30,7 @@ class RepoSignals:
     closed_issues: int = 0
     closed_prs: int = 0
     contributors: int = 0
-    monthly: dict[str, dict[str, int]] = field(
-        default_factory=dict
-    )  # {YYYY-MM: {commits,prs,issues}}
+    monthly: dict[str, dict[str, int]] = field(default_factory=dict)  # {YYYY-MM: {commits,prs,issues}}
     source: str = "estimated"  # "measured" | "estimated" | "none"
 
 
@@ -118,13 +116,14 @@ class Package:
     data_date: str = ""
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the package as a plain dict."""
         return asdict(self)
 
 
 __all__ = [
-    "RepoSignals",
-    "VersionRow",
     "Comparison",
     "Governance",
     "Package",
+    "RepoSignals",
+    "VersionRow",
 ]

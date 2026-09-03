@@ -28,13 +28,14 @@ RPM_NS = "http://linux.duke.edu/metadata/rpm"
 
 
 def download(url: str, dest: Path, *, timeout: float = 120) -> Path:
+    """Stream-download ``url`` into ``dest`` and return the destination path."""
     import requests
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     LOG.info("downloading %s", url)
     with requests.get(url, stream=True, timeout=timeout) as r:
         r.raise_for_status()
-        with open(dest, "wb") as fh:
+        with Path(dest).open("wb") as fh:
             for chunk in r.iter_content(chunk_size=1 << 20):
                 if chunk:
                     fh.write(chunk)
@@ -42,6 +43,7 @@ def download(url: str, dest: Path, *, timeout: float = 120) -> Path:
 
 
 def decompress(path: Path) -> bytes:
+    """Return the decompressed bytes of a gzip/zstd file, or the raw bytes if plain XML."""
     if path.read_bytes()[:2] == b"\x1f\x8b":
         with gzip.open(path, "rb") as fh:
             return fh.read()
@@ -53,6 +55,7 @@ def decompress(path: Path) -> bytes:
 
 
 def primary_path_from_repomd(repomd: bytes) -> str | None:
+    """Return the primary data ``location`` href parsed from repomd.xml bytes."""
     root = ET.fromstring(repomd)
     # repomd declares a default namespace; use a wildcard lookup to be robust to
     # both namespaced and plain-XML variants.
@@ -84,7 +87,7 @@ def _find(obj, local: str):
     return None
 
 
-def _text(obj, tag: str, ns: str = "") -> str:
+def _text(obj, tag: str) -> str:
     el = _find(obj, tag)
     return (el.text or "").strip() if el is not None else ""
 
@@ -164,16 +167,15 @@ def source_name_from_rpm(src_rpm: str) -> str:
     """`python3-libs-3.9.16-1.oe2403.src.rpm` -> `python3-libs`."""
     if not src_rpm:
         return ""
-    base = src_rpm.split("/")[-1]
+    base = src_rpm.rsplit("/", maxsplit=1)[-1]
     base = re.sub(r"\.src\.rpm$", "", base)
     # The source RPM filename is "<name>-<version>-<release>". Source names often
     # contain hyphens themselves (e.g. 389-ds-base), so we only strip the final
     # two hyphen-separated fields, which are version and release.
     parts = base.rsplit("-", 2)
-    if len(parts) == 3:
-        # Release starts with a digit or has a digit-dot (e.g. 1.oe2609).
-        if re.match(r"^[0-9]", parts[-1]) or re.match(r"^[0-9]", parts[-2]):
-            return parts[0]
+    # Release starts with a digit or has a digit-dot (e.g. 1.oe2609).
+    if len(parts) == 3 and (re.match(r"^[0-9]", parts[-1]) or re.match(r"^[0-9]", parts[-2])):
+        return parts[0]
     # Fallback: the name is whatever precedes the last "-".
     return base.rsplit("-", 1)[0]
 
@@ -251,7 +253,6 @@ def build_source_records(records: list[dict]) -> dict[str, dict]:
 def collect_release(
     repomd_url: str,
     cache_dir: Path,
-    arch_field: str = "x86_64",
     *,
     light: bool = False,
 ) -> dict[str, dict]:

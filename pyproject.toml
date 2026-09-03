@@ -21,12 +21,86 @@ pkg-gov-api = "app.server:run"
 where = ["backend"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py310"
 exclude = ["frontend", ".venv", "node_modules"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B"]
+preview = true
+select = ["ALL"]
+ignore = [
+  # 版权头：仓库无此惯例
+  "missing-copyright-notice",
+  # docstring 强制 Returns/Raises 段：preview 规则过严，摘要已承载语义
+  "docstring-missing-returns",
+  "docstring-missing-yields",
+  "docstring-missing-exception",
+  # 中文文案的全角标点/字符歧义误报
+  "ambiguous-unicode-character-string",
+  "ambiguous-unicode-character-docstring",
+  "ambiguous-unicode-character-comment",
+  # 与 ruff format 冲突的官方组合
+  "missing-trailing-comma",
+  "single-line-implicit-string-concatenation",
+  # 类型注解由 mypy 把关，ANN 系不重复报
+  "missing-type-function-argument",
+  "missing-type-args",
+  "missing-type-kwargs",
+  "missing-return-type-private-function",
+  "any-type",
+  # FastAPI Depends 的 Annotated 改造成本高、无运行时收益
+  "fast-api-non-annotated-dependency",
+  # __future__ annotations 下 type-checking 块搬运无运行时收益
+  "typing-only-first-party-import",
+  "typing-only-third-party-import",
+  "typing-only-standard-library-import",
+  # 函数内 import 是刻意的懒加载/避环模式
+  "import-outside-top-level",
+  # 业务阈值（180/365 天、分数权重等）由命名与注释承载语义
+  "magic-value-comparison",
+  # 引擎函数复杂度类：重构成本高，mypy 已兜底
+  "too-many-arguments",
+  "too-many-locals",
+  "too-many-statements",
+  "too-many-positional-arguments",
+  # in-list 微优化建议
+  "literal-membership",
+  # 布尔位置参数：内部 API
+  "boolean-type-hint-positional-argument",
+  "boolean-default-value-positional-argument",
+  # 采集容错模式：循环内 try-except、except-pass
+  "try-except-in-loop",
+  "try-except-pass",
+  # 异常消息风格（f-string/字符串直传）
+  "raw-string-in-exception",
+  "f-string-in-exception",
+  "raise-vanilla-args",
+  # 采集器解析内部可信 XML、subprocess、构建脚本本地时间
+  "suspicious-xml-element-tree-usage",
+  "suspicious-xml-etree-import",
+  "suspicious-subprocess-import",
+  "suspicious-url-open-usage",
+  "subprocess-without-shell-equals-true",
+  "start-process-with-partial-path",
+  "call-date-today",
+  # scripts CLI 使用 print 是正常输出方式
+  "print",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.pylint]
+max-branches = 24
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = [
+  # 独立脚本目录，非包，补 __init__.py 反而错误
+  "implicit-namespace-package",
+]
 
 [tool.mypy]
 python_version = "3.10"

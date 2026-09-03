@@ -12,6 +12,7 @@ upstream signals (latest release, last release date, ``Requires-Python``).
 from __future__ import annotations
 
 import concurrent.futures as cf
+import contextlib
 import datetime as dt
 import json
 import re
@@ -52,7 +53,7 @@ def fetch_profile(source: str) -> dict:
         url = f"https://pypi.org/pypi/{project}/json"
         try:
             data = json_or_none(http_get(url, timeout=20))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("pypi fetch failed for %s: %s", project, exc)
             continue
         if not data:
@@ -63,14 +64,10 @@ def fetch_profile(source: str) -> dict:
         for files in data.get("releases", {}).values():
             if files:
                 d = files[0].get("upload_time", "")
-                try:
+                with contextlib.suppress(ValueError):
                     release_dates.append(dt.date.fromisoformat(d[:10]))
-                except ValueError:
-                    pass
         last_release = max(release_dates).isoformat() if release_dates else ""
-        days = (
-            (dt.date.today() - dt.date.fromisoformat(last_release)).days if last_release else None
-        )
+        days = (dt.date.today() - dt.date.fromisoformat(last_release)).days if last_release else None
         results.append(
             {
                 "pypi_name": project,
@@ -106,7 +103,7 @@ def collect(packages: list[str], *, cache: Path | None = None) -> dict[str, dict
     if cache.exists():
         try:
             cached = json.loads(cache.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
+        except Exception:  # ruff: ignore[blind-except]
             cached = {}
     todo = [p for p in packages if p not in cached]
     LOG.info("pypi: %d cached, fetching %d pip modules", len(cached), len(todo))
@@ -114,7 +111,7 @@ def collect(packages: list[str], *, cache: Path | None = None) -> dict[str, dict
     def _w(p: str) -> tuple[str, dict]:
         try:
             return p, fetch_profile(p)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("pypi %s failed: %s", p, exc)
             return p, {"pypi_name": p, "pypi_stale": False}
 

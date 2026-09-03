@@ -67,9 +67,7 @@ def _activity_index(monthly: dict[str, dict]) -> float:
 
     # Cap each window at a reference "busy" volume so the index is bounded.
     ref_high = 8.0  # ~8 monthly activity units (commits/PRs) = fully healthy distro repo
-    composite = sum(
-        float(w) * min(window_score(int(m)), ref_high) / ref_high for m, w in windows.items()
-    )
+    composite = sum(float(w) * min(window_score(int(m)), ref_high) / ref_high for m, w in windows.items())
     return min(1.0, max(0.0, composite))
 
 
@@ -97,9 +95,7 @@ def grade(signals: RepoSignals) -> tuple[str, float | None, dict]:
         scores = {"index": None, "source": "estimated", "composite": None}
         return "N/A", None, scores
 
-    has_any_signal = bool(
-        signals.monthly or signals.last_commit or signals.closed_prs or signals.closed_issues
-    )
+    has_any_signal = bool(signals.monthly or signals.last_commit or signals.closed_prs or signals.closed_issues)
     if not has_any_signal:
         scores = {"index": None, "source": "estimated", "composite": None}
         return "N/A", None, scores

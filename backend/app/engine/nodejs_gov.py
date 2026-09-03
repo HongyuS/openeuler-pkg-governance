@@ -15,6 +15,7 @@ _DEFAULT_TOOLCHAIN = ["nodejs", "node", "npm", "pnpm", "yarn", "corepack", "bun"
 
 
 def is_node_module(name: str) -> bool:
+    """Return whether a package name denotes an npm module."""
     return name.startswith("nodejs-")
 
 
@@ -27,9 +28,7 @@ def _fmt(names: list[str]) -> str:
     return shown + ("…" if len(names) > 5 else "")
 
 
-def apply_nodejs(
-    pkg: Package, system_set: set[str], npm_profiles: dict[str, dict] | None = None
-) -> Package:
+def apply_nodejs(pkg: Package, system_set: set[str], npm_profiles: dict[str, dict] | None = None) -> Package:
     """Apply the npm-module disposal policy to a package."""
     name = pkg.name
     gov = pkg.governance
@@ -37,9 +36,7 @@ def apply_nodejs(
         if gov.disposal == "sunset":
             gov.disposal = "maintain"
             gov.sunset_candidate = False
-        gov.maintenance_notes.append(
-            "Node.js 运行时/包管理器：开发者生态入口，系统源需重点维护并保持跟进上游。"
-        )
+        gov.maintenance_notes.append("Node.js 运行时/包管理器：开发者生态入口，系统源需重点维护并保持跟进上游。")
         return pkg
     if not is_node_module(name):
         return pkg
@@ -48,8 +45,7 @@ def apply_nodejs(
     note = []
     if prof.get("npm_deprecated"):
         note.append(
-            f"npm 上游 [{prof.get('npm_name', '')}] 已被官方标记 deprecated"
-            f"（最新 {prof.get('npm_latest', '')}）。"
+            f"npm 上游 [{prof.get('npm_name', '')}] 已被官方标记 deprecated（最新 {prof.get('npm_latest', '')}）。"
         )
     if prof.get("npm_stale"):
         note.append(
@@ -72,13 +68,9 @@ def apply_nodejs(
     sys_deps = [d for d in gov.dependents if d in system_set]
     other_deps = [d for d in gov.dependents if d not in system_set]
     if sys_deps:
-        gov.maintenance_notes.append(
-            f"npm 模块被关键包 [{_fmt(sys_deps)}] 强制依赖：保留在系统源维护。"
-        )
+        gov.maintenance_notes.append(f"npm 模块被关键包 [{_fmt(sys_deps)}] 强制依赖：保留在系统源维护。")
         if prof.get("npm_stale") or prof.get("npm_deprecated"):
-            gov.maintenance_notes.append(
-                "npm 模块：上游停更/已废弃，但仍被关键包依赖，需维持并评估替代。"
-            )
+            gov.maintenance_notes.append("npm 模块：上游停更/已废弃，但仍被关键包依赖，需维持并评估替代。")
     elif other_deps:
         gov.maintenance_notes.append(
             f"npm 模块仅被非关键包 [{_fmt(other_deps)}] 依赖：属开发工具，"

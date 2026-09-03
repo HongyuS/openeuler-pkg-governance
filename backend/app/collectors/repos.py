@@ -22,16 +22,14 @@ from app import config
 from app.utils import LOG, http_get, json_or_none
 
 
-def collect_org_push(
-    org: str = "src-openeuler", *, max_pages: int = 120, cache: Path | None = None
-) -> dict[str, str]:
+def collect_org_push(org: str = "src-openeuler", *, max_pages: int = 120, cache: Path | None = None) -> dict[str, str]:
     """Return {repo_name: pushed_at} for a GitCode org (paginated, cached)."""
     cache = cache or (config.CACHE_DIR / f"repo_push_{org}.json")
     result: dict[str, str] = {}
     if cache.exists():
         try:
             result = json.loads(cache.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
+        except Exception:  # ruff: ignore[blind-except]
             result = {}
     if result:
         LOG.info("org %s: %d repos in listing cache", org, len(result))
@@ -62,8 +60,9 @@ def collect_org_push(
 
 
 def build_resolver(packages: list[str]) -> Callable[[str], str | None]:
-    """Return resolver(pkg) -> repo name for packages whose GitCode repo name
-    differs from the source-package name.
+    """Return resolver(pkg) -> repo name.
+
+    For packages whose GitCode repo name differs from the source-package name.
 
     Resolution chain (first hit wins):
       1. exact name,

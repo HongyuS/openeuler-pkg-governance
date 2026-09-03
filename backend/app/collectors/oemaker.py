@@ -37,7 +37,7 @@ def branches() -> set[str]:
         resp = http_get(f"{API_BASE}/branches", params={"per_page": 100}, timeout=20)
         data = resp.json() if resp.status_code == 200 else []
         return {b.get("name", "") for b in data if isinstance(b, dict)} - {""}
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         return set()
 
 
@@ -72,7 +72,7 @@ def _fetch_file(branch: str, path: str) -> bytes:
             LOG.info("oemaker: %s not in branch %s (HTTP %s)", path, branch, resp.status_code)
             return b""
         content = base64.b64decode(resp.json().get("content", ""))
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         return b""
     if content:
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -126,21 +126,19 @@ def parse_plain_list(data: bytes) -> list[str]:
 
 
 def binary_source_map(stream_id: str) -> dict[str, str]:
-    """binary RPM name -> source package name, from the stream's OS repo."""
+    """Binary RPM name -> source package name, from the stream's OS repo."""
     desc = openeuler.resolve_stream(stream_id)
     if not desc:
         return {}
     spec = next((s for s in config.REPO_SOURCES if s["name"] == "OS"), None)
     if not spec:
         return {}
-    url = openeuler._repomd_for(desc["base"], spec)
+    url = openeuler.repomd_for(desc["base"], spec)
     if not url:
         return {}
     try:
-        src = repodata_parser.collect_release(
-            url, config.REPO_META_CACHE / stream_id.replace("/", "_"), light=False
-        )
-    except Exception as exc:  # noqa: BLE001
+        src = repodata_parser.collect_release(url, config.REPO_META_CACHE / stream_id.replace("/", "_"), light=False)
+    except Exception as exc:  # ruff: ignore[blind-except]
         LOG.warning("oemaker: OS repo parse failed for %s: %s", stream_id, exc)
         return {}
     return {b: sname for sname, rec in src.items() for b in rec.get("binaries", [])}
@@ -161,15 +159,15 @@ def collect(streams: dict[str, str]) -> dict:
         if not branch:
             LOG.info("oemaker: no branch matches stream %s", stream_id)
             continue
-        baseline_bin = parse_comps(_fetch_file(branch, "normal_x86_64.xml")) + [
-            n for n in parse_comps(_fetch_file(branch, "normal_aarch64.xml"))
-        ]
+        baseline_bin = parse_comps(_fetch_file(branch, "normal_x86_64.xml")) + list(
+            parse_comps(_fetch_file(branch, "normal_aarch64.xml"))
+        )
         excluded_bin = parse_rpmlist(_fetch_file(branch, "rpmlist.xml"))
         devstation_bin: list[str] = []
         if "-DevStation" in stream_id:
-            devstation_bin = parse_plain_list(
-                _fetch_file(branch, "devstation_x86_64_rpmlist")
-            ) + parse_plain_list(_fetch_file(branch, "devstation_aarch64_rpmlist"))
+            devstation_bin = parse_plain_list(_fetch_file(branch, "devstation_x86_64_rpmlist")) + parse_plain_list(
+                _fetch_file(branch, "devstation_aarch64_rpmlist")
+            )
         b2s = binary_source_map(stream_id)
         baseline_src = {b2s.get(n, n) for n in baseline_bin}
         excluded_src = {b2s.get(n, n) for n in excluded_bin}

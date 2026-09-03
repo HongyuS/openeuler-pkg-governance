@@ -17,10 +17,10 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 
-from app import config  # noqa: E402
-from app.engine import pipeline  # noqa: E402
-from app.models import RepoSignals  # noqa: E402
-from app.utils import LOG, iso_today, setup_logging  # noqa: E402
+from app import config  # ruff: ignore[module-import-not-at-top-of-file]
+from app.engine import pipeline  # ruff: ignore[module-import-not-at-top-of-file]
+from app.models import RepoSignals  # ruff: ignore[module-import-not-at-top-of-file]
+from app.utils import LOG, iso_today, setup_logging  # ruff: ignore[module-import-not-at-top-of-file]
 
 setup_logging()
 
@@ -29,7 +29,7 @@ def _load(path: Path, default):
     if path.exists():
         try:
             return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
+        except Exception:  # ruff: ignore[blind-except]
             pass
     return default
 
@@ -69,6 +69,7 @@ def _synthetic_inventory() -> dict[str, dict]:
 
 
 def main() -> None:
+    """Build the demo dataset from real caches or synthetic data and write packages.json."""
     inventory = _load(config.CACHE_DIR / "inventory.json", {}).get("packages", None)
     if not inventory:
         inventory = _synthetic_inventory()
@@ -78,10 +79,7 @@ def main() -> None:
     activity_raw = _load(config.CACHE_DIR / "activity.json", {})
     activity = {k: RepoSignals(**v) for k, v in activity_raw.items() if isinstance(v, dict)}
 
-    special = {
-        s["name"]: s["note"]
-        for s in __import__("app").engine.rules_loader.rules().get("special_packages", [])
-    }
+    special = {s["name"]: s["note"] for s in __import__("app").engine.rules_loader.rules().get("special_packages", [])}
     packages = pipeline.build_packages(inventory, ubuntu, activity, special=special)
 
     # Offline stand-in with the same shape build.py emits: streams is a list of

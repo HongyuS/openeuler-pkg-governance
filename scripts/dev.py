@@ -19,6 +19,7 @@ script health-checks it and exits 0 instead of spawning a duplicate.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import signal
 import socket
@@ -42,9 +43,7 @@ DEFAULT_HOST = os.getenv("HOST", "127.0.0.1")
 # ---------------------------------------------------------------------------
 def _run(cmd: list[str]) -> str:
     try:
-        return subprocess.run(
-            cmd, capture_output=True, text=True, timeout=10, check=False
-        ).stdout.strip()
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=10, check=False).stdout.strip()
     except (OSError, subprocess.TimeoutExpired):
         return ""
 
@@ -68,12 +67,14 @@ def port_free(port: int) -> bool:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind(("127.0.0.1", port))
-            return True
         except OSError:
             return False
+        else:
+            return True
 
 
 def describe_pids(pids: list[int]) -> str:
+    """Return ps command lines for the given pids, or a placeholder if unavailable."""
     rows = _run(["ps", "-o", "pid=,command=", "-p", ",".join(map(str, pids))])
     return rows or "(process detail unavailable)"
 
@@ -82,14 +83,13 @@ def describe_pids(pids: list[int]) -> str:
 # lifecycle
 # ---------------------------------------------------------------------------
 def stop(pids: list[int], timeout: float = 5.0) -> None:
+    """SIGTERM the given pids, wait up to timeout, then SIGKILL any survivors."""
     if not pids:
         print("no running dev-server instance")
         return
     for pid in pids:
-        try:
+        with contextlib.suppress(ProcessLookupError):
             os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if not server_pids():
@@ -119,6 +119,7 @@ def health(url: str, timeout: float = 30.0) -> bool:
 
 
 def ensure_ui() -> None:
+    """Build the frontend with pnpm unless frontend/dist already exists."""
     if (ROOT / "frontend" / "dist").is_dir():
         return
     print("frontend/dist missing — building UI (pnpm)…")
@@ -127,6 +128,7 @@ def ensure_ui() -> None:
 
 
 def start(host: str, port: int, *, any_port: bool) -> int:
+    """Launch the dev server on host:port, handling port conflicts and idempotent start."""
     bound = listening_pids(port)
     ours = server_pids()
     if bound:
@@ -160,10 +162,7 @@ def start(host: str, port: int, *, any_port: bool) -> int:
         "--port",
         str(port),
     ]
-    if host in ("0.0.0.0", "::"):
-        display = f"http://127.0.0.1:{port}"
-    else:
-        display = f"http://{host}:{port}"
+    display = f"http://127.0.0.1:{port}" if host in ("0.0.0.0", "::") else f"http://{host}:{port}"  # ruff: ignore[hardcoded-bind-all-interfaces] — 仅展示分支判断，非实际绑定
     print(f"starting {SERVER_TARGET}  ->  {display}")
     proc = subprocess.Popen(cmd, cwd=BACKEND, env=env)
     try:
@@ -184,6 +183,7 @@ def start(host: str, port: int, *, any_port: bool) -> int:
 
 
 def status() -> int:
+    """Print running dev-server instances, or a not-running notice."""
     ours = server_pids()
     if not ours:
         print("dev-server: not running")
@@ -194,6 +194,7 @@ def status() -> int:
 
 
 def main() -> int:
+    """Parse CLI arguments and dispatch to status, stop, or start."""
     ap = argparse.ArgumentParser(description="pkg-governance dev server launcher")
     ap.add_argument("--host", default=DEFAULT_HOST)
     ap.add_argument("--port", type=int, default=DEFAULT_PORT)

@@ -77,9 +77,7 @@ def _compute_lag(comp: Comparison) -> Comparison:
     oe_rows = [r for r in present if r.distro == "openEuler"]
     external = [r for r in present if r.distro not in ("openEuler", "upstream")]
 
-    oe_best = (
-        max(oe_rows, key=lambda r: compare_upstream(r.version, r.version) or 0) if oe_rows else None
-    )
+    oe_best = max(oe_rows, key=lambda r: compare_upstream(r.version, r.version) or 0) if oe_rows else None
     if oe_rows:
         oe_best = oe_rows[0]
         for r in oe_rows[1:]:
@@ -95,8 +93,7 @@ def _compute_lag(comp: Comparison) -> Comparison:
             comp.latest_upstream = newest_ext.version
             comp.latest_upstream_source = f"{newest_ext.distro} {newest_ext.stream}"
             comp.lag_notes.append(
-                f"{newest_ext.distro} {newest_ext.stream} carries {newest_ext.version} "
-                f"vs openEuler {oe_best.version}."
+                f"{newest_ext.distro} {newest_ext.stream} carries {newest_ext.version} vs openEuler {oe_best.version}."
             )
 
     ubuntu_lts = next((r for r in present if r.stream == "ubuntu_LTS" and r.version), None)
@@ -106,8 +103,6 @@ def _compute_lag(comp: Comparison) -> Comparison:
     if ubuntu_lts and oe_lts:
         comp.lag_behind_ubuntu_lts = compare_upstream(ubuntu_lts.version, oe_lts.version) > 0
     if ubuntu_interim and oe_best:
-        comp.lag_behind_ubuntu_interim = (
-            compare_upstream(ubuntu_interim.version, oe_best.version) > 0
-        )
+        comp.lag_behind_ubuntu_interim = compare_upstream(ubuntu_interim.version, oe_best.version) > 0
 
     return comp

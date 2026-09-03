@@ -17,6 +17,7 @@ from app.models import Governance
 
 
 def estimate(gov: Governance) -> Governance:
+    """Estimate annual maintenance effort (person-days / person-years) for a package."""
     cfg = rules().get("effort", {})
     up_min = cfg.get("upgrade_person_days_min", 3)
     up_max = cfg.get("upgrade_person_days_max", 10)

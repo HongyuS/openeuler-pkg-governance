@@ -53,14 +53,12 @@ def _load_cache(force: bool = False) -> None:
         STATE["meta"] = data.get("meta", {})
         STATE["loaded_mtime"] = mtime
         LOG.info("loaded %d packages from %s", len(STATE["packages"]), path)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # ruff: ignore[blind-except]
         LOG.warning("could not load %s: %s", path, exc)
     if config.STREAM_VERSIONS_CACHE.exists():
         try:
-            STATE["stream_versions"] = json.loads(
-                config.STREAM_VERSIONS_CACHE.read_text(encoding="utf-8")
-            )
-        except Exception as exc:  # noqa: BLE001
+            STATE["stream_versions"] = json.loads(config.STREAM_VERSIONS_CACHE.read_text(encoding="utf-8"))
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("could not load stream versions: %s", exc)
 
 
@@ -84,8 +82,10 @@ def _ubuntu_baselines() -> dict[str, dict]:
 
 
 def _sv_rec(stream: str, name: str | None) -> dict:
-    """One package's stream_versions entry; tolerates the legacy
-    ``{name: "version"}`` format (only the version is usable then)."""
+    """One package's stream_versions entry.
+
+    Tolerates the legacy ``{name: "version"}`` format (only the version is usable then).
+    """
     if not name:
         return {}
     rec = STATE["stream_versions"].get(stream, {}).get(name)
@@ -95,9 +95,11 @@ def _sv_rec(stream: str, name: str | None) -> dict:
 
 
 def _apply_stream(p: dict, lts: str, innov: str) -> dict[str, Any]:
-    """Recompute the openEuler version columns, lag and repo tags for a
-    selected stream pair. Tags follow the LTS stream, falling back to the
-    innovation stream, then to the build-time snapshot in packages.json."""
+    """Recompute the openEuler version columns, lag and repo tags.
+
+    For a selected stream pair. Tags follow the LTS stream, falling back to the
+    innovation stream, then to the build-time snapshot in packages.json.
+    """
     name = str(p.get("name") or "")
     lts_rec = _sv_rec(lts, name)
     innov_rec = _sv_rec(innov, name)
@@ -140,18 +142,16 @@ def _summary(lts: str | None = None, innov: str | None = None) -> dict[str, Any]
         "outdated": sum(1 for r in rows if r["lagging"]),
         "sunset_candidate": sum(1 for p in pkgs if p.get("governance", {}).get("sunset_candidate")),
         "unmaintained_risk": sum(
-            1
-            for p in pkgs
-            if "长期未更新" in " ".join(p.get("governance", {}).get("maintenance_notes", []))
+            1 for p in pkgs if "长期未更新" in " ".join(p.get("governance", {}).get("maintenance_notes", []))
         ),
         "special": sum(1 for p in pkgs if p.get("special")),
     }
     effort_pd = round(sum(p.get("governance", {}).get("effort_person_days", 0) for p in pkgs), 1)
     effort_py = round(sum(p.get("governance", {}).get("effort_person_years", 0) for p in pkgs), 3)
     effort_note = _effort_note(effort_py)
-    _lag_map = {p.get("name"): r for p, r in zip(pkgs, rows, strict=False)}
+    lag_map = {p.get("name"): r for p, r in zip(pkgs, rows, strict=False)}
     top_lagging = sorted(
-        (p for p in pkgs if _lag_map.get(p.get("name"), {}).get("lagging")),
+        (p for p in pkgs if lag_map.get(p.get("name"), {}).get("lagging")),
         key=lambda p: p.get("governance", {}).get("score", 0),
         reverse=True,
     )[:10]
@@ -163,8 +163,8 @@ def _summary(lts: str | None = None, innov: str | None = None) -> dict[str, Any]
     return {
         "distributions": dist,
         "effort": {"person_days": effort_pd, "person_years": effort_py, "note": effort_note},
-        "top_lagging": [_light(p, _lag_map.get(p.get("name"), {})) for p in top_lagging],
-        "top_sunset": [_light(p, _lag_map.get(p.get("name"), {})) for p in sunset],
+        "top_lagging": [_light(p, lag_map.get(p.get("name"), {})) for p in top_lagging],
+        "top_sunset": [_light(p, lag_map.get(p.get("name"), {})) for p in sunset],
         "streams": STATE["meta"].get("streams", []),
         "baselines": STATE["meta"].get("baselines", {}),
         "data_date": STATE["meta"].get("data_date", ""),
@@ -207,16 +207,19 @@ def _light(p: dict, stream_row: dict | None = None) -> dict[str, Any]:
 
 @app.get("/api/health")
 def health() -> dict:
+    """Report service health and the loaded package count."""
     return {"status": "ok", "packages": len(STATE["packages"])}
 
 
 @app.get("/api/meta")
 def meta() -> dict:
+    """Return the dataset metadata."""
     return {"meta": STATE["meta"], "config": {"version": "1.0"}}
 
 
 @app.get("/api/streams")
 def streams() -> dict:
+    """Return the available streams and the default stream pair."""
     _load_cache()
     return {
         "streams": STATE["meta"].get("streams", []),
@@ -226,12 +229,14 @@ def streams() -> dict:
 
 @app.get("/api/summary")
 def summary(lts: str = Query(""), innov: str = Query("")) -> dict:
+    """Return governance summary counts for the selected stream pair."""
     _load_cache()
     return _summary(lts or None, innov or None)
 
 
 @app.get("/api/digest")
 def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
+    """Return the full digest: metadata, summary and per-package rows."""
     _load_cache()
     pkgs = STATE["packages"]
     lts, innov = _stream_ids(lts or None, innov or None)
@@ -239,21 +244,18 @@ def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
     return {
         "meta": STATE["meta"],
         "summary": {
-            "distributions": {
-                k: v
-                for k, v in {
+            "distributions": dict(
+                {
                     "total": len(pkgs),
                     "p_level": _count(pkgs, "p_level"),
                     "importance": _count(pkgs, "importance"),
                     "activity_grade": _count(pkgs, "activity_grade"),
                     "disposal": _count(pkgs, "disposal"),
                     "outdated": sum(1 for r in rows if r["lagging"]),
-                    "sunset_candidate": sum(
-                        1 for p in pkgs if p.get("governance", {}).get("sunset_candidate")
-                    ),
+                    "sunset_candidate": sum(1 for p in pkgs if p.get("governance", {}).get("sunset_candidate")),
                     "special": sum(1 for p in pkgs if p.get("special")),
                 }.items()
-            },
+            ),
             "selected": {"openEuler_LTS": lts, "openEuler_innovation": innov},
         },
         "packages": [
@@ -299,8 +301,7 @@ def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
                 "versions": r["versions"],
                 "last_commit": p.get("activity", {}).get("last_commit", ""),
                 "open_backlog": (
-                    p.get("activity", {}).get("open_issues", 0)
-                    + p.get("activity", {}).get("open_prs", 0)
+                    p.get("activity", {}).get("open_issues", 0) + p.get("activity", {}).get("open_prs", 0)
                 ),
             }
             for p, r in zip(pkgs, rows, strict=False)
@@ -324,6 +325,7 @@ def list_packages(
     lts: str = Query(""),
     innov: str = Query(""),
 ) -> JSONResponse:
+    """Return a filtered, sorted and paginated package list."""
     _load_cache()
     items = _filter(
         STATE["packages"],
@@ -353,6 +355,7 @@ def list_packages(
 
 @app.get("/api/packages/{name}")
 def get_package(name: str, lts: str = Query(""), innov: str = Query("")) -> dict:
+    """Return one package's full record with recomputed stream columns."""
     _load_cache()
     for p in STATE["packages"]:
         if p.get("name") == name:
@@ -361,13 +364,12 @@ def get_package(name: str, lts: str = Query(""), innov: str = Query("")) -> dict
             row = _apply_stream(p, lts, innov)
             for k in ("has_source", "has_debug", "in_epol", "in_update", "latest_repo"):
                 out[k] = row[k]
-            out["open_euler"] = {
-                key: value
-                for key, value in {
+            out["open_euler"] = dict(
+                {
                     "openEuler_LTS": row["versions"].get("openEuler_LTS", ""),
                     "openEuler_innovation": row["versions"].get("openEuler_innovation", ""),
                 }.items()
-            }
+            )
             out["versions"] = row["baselines"]
             comp = dict(out.get("comparison", {}))
             comp["baselines"] = row["baselines"]
@@ -382,6 +384,7 @@ def get_package(name: str, lts: str = Query(""), innov: str = Query("")) -> dict
 
 @app.get("/api/packages/{name}/activity")
 def activity_series(name: str) -> dict:
+    """Return a package's activity signals, 404 if the package is unknown."""
     _load_cache()
     for p in STATE["packages"]:
         if p.get("name") == name:
@@ -401,6 +404,7 @@ def activity_series(name: str) -> dict:
 
 @app.get("/api/reload")
 def reload_data() -> dict:
+    """Force-reload the dataset cache and report the loaded package count."""
     _load_cache(force=True)
     return {"loaded": len(STATE["packages"])}
 
@@ -463,6 +467,7 @@ if config.FRONTEND_DIR.exists():
 
 
 def run() -> None:
+    """Run the API server with uvicorn."""
     import uvicorn
 
     uvicorn.run("app.server:app", host=config.HOST, port=config.PORT, reload=False)

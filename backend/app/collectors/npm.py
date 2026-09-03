@@ -10,6 +10,7 @@ stale or deprecated is a stronger sunset candidate than a maintained one.
 from __future__ import annotations
 
 import concurrent.futures as cf
+import contextlib
 import datetime as dt
 import json
 import re
@@ -45,7 +46,7 @@ def fetch_profile(source: str) -> dict:
         url = f"https://registry.npmjs.org/{quote(project, safe='@')}"
         try:
             data = json_or_none(http_get(url, timeout=20))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("npm fetch failed for %s: %s", project, exc)
             continue
         if not data or data.get("error"):
@@ -55,14 +56,10 @@ def fetch_profile(source: str) -> dict:
         for ver, ts in data.get("time", {}).items():
             if ver in ("created", "modified"):
                 continue
-            try:
+            with contextlib.suppress(ValueError):
                 release_dates.append(dt.date.fromisoformat(str(ts)[:10]))
-            except ValueError:
-                pass
         last_release = max(release_dates).isoformat() if release_dates else ""
-        days = (
-            (dt.date.today() - dt.date.fromisoformat(last_release)).days if last_release else None
-        )
+        days = (dt.date.today() - dt.date.fromisoformat(last_release)).days if last_release else None
         latest_meta = data.get("versions", {}).get(latest, {}) if latest else {}
         results.append(
             {
@@ -99,7 +96,7 @@ def collect(packages: list[str], *, cache: Path | None = None) -> dict[str, dict
     if cache.exists():
         try:
             cached = json.loads(cache.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
+        except Exception:  # ruff: ignore[blind-except]
             cached = {}
     todo = [p for p in packages if p not in cached]
     LOG.info("npm: %d cached, fetching %d npm modules", len(cached), len(todo))
@@ -107,7 +104,7 @@ def collect(packages: list[str], *, cache: Path | None = None) -> dict[str, dict
     def _w(p: str) -> tuple[str, dict]:
         try:
             return p, fetch_profile(p)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("npm %s failed: %s", p, exc)
             return p, {"npm_name": p, "npm_stale": False}
 

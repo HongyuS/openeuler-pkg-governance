@@ -28,9 +28,7 @@ for _d in (DATA_DIR, RULES_DIR, CACHE_DIR):
 # ---------------------------------------------------------------------------
 OPEN_EULER_MIRROR = os.getenv("OPEN_EULER_MIRROR", "https://repo.openeuler.org")
 # Canonical daily-build / RC host for pre-GA innovation streams.
-OPEN_EULER_DAILYBUILD = os.getenv(
-    "OPEN_EULER_DAILYBUILD", "https://dailybuild.openeuler.openatom.cn/dailybuild"
-)
+OPEN_EULER_DAILYBUILD = os.getenv("OPEN_EULER_DAILYBUILD", "https://dailybuild.openeuler.openatom.cn/dailybuild")
 OPEN_EULER_ARCH = os.getenv("OPEN_EULER_ARCH", "x86_64")
 # Repo + arch variant inside a release ("everything", "standard", "baseos"...).
 OPEN_EULER_TARGETS = os.getenv("OPEN_EULER_TARGETS", "everything").split(",")

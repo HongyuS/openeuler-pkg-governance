@@ -18,7 +18,6 @@ def recommend(
     *,
     grade: str,
     activity_source: str,
-    lagging: bool,
     last_commit: str = "",
     open_issues: int = 0,
     open_prs: int = 0,
@@ -40,9 +39,7 @@ def recommend(
     if sunset_eligible:
         gov.disposal = "sunset"
         gov.sunset_candidate = True
-        gov.maintenance_notes.append(
-            "D 级活跃度 + 无反向依赖 + 非关键：建议日落（先确认无下游消费）。"
-        )
+        gov.maintenance_notes.append("D 级活跃度 + 无反向依赖 + 非关键：建议日落（先确认无下游消费）。")
     elif grade == "D":
         gov.disposal = "maintain"
         gov.maintenance_notes.append("D 级但仍有关键性/依赖：暂不日落，需维持并上报无人维护风险。")
@@ -56,8 +53,7 @@ def recommend(
         idle = days_since(last_commit) or 0
         if idle > 180 and (open_issues or open_prs):
             gov.maintenance_notes.append(
-                f"最近提交 {idle} 天前，且存在 {open_issues + open_prs} 个未闭环 Issue/PR："
-                "疑似长期未更新/无人维护。"
+                f"最近提交 {idle} 天前，且存在 {open_issues + open_prs} 个未闭环 Issue/PR：疑似长期未更新/无人维护。"
             )
         elif idle > 365:
             gov.maintenance_notes.append(f"超过 {idle} 天无提交，未更新风险高。")
