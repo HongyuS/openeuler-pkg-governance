@@ -67,11 +67,20 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
         <span className={`badge b-${g.activity_grade}`}>活跃度 {g.activity_grade}</span>
         {d.special ? <span className="tag">DevStation 特殊包</span> : ""}
         {g.sunset_candidate ? <span className="tag">日落候选</span> : ""}
-        {d.in_iso ? <span className="tag" title="基础安装 ISO 内置：官方交付组件，退出需走 release-management 变更流程">ISO 内置</span> : ""}
-        {d.iso_baseline ? <span className="tag" title="oemaker comps 组明确纳入（mandatory/default）">ISO 精选</span> : ""}
-        {d.iso_excluded ? <span className="tag" title="oemaker rpmlist 明确排除出基础 ISO">ISO 排除</span> : ""}
+        {d.in_iso ? <span className="tag" title="官网 Offline Standard ISO（基础安装 ISO）内置组件；DevStation 流下含 DevStation ISO 内置">Standard ISO</span> : ""}
+        {d.iso_desktop ? <span className="tag" title="官网桌面版 ISO 产品内置（oemaker desktop comps）">Desktop ISO</span> : ""}
+        {d.iso_edge ? <span className="tag" title="官网边缘计算场景 ISO 产品内置（oemaker edge comps）">Edge ISO</span> : ""}
+        {d.iso_excluded ? <span className="tag" title="oemaker rpmlist 明确排除出 Standard ISO，仍由 everything 仓提供">不随 Standard ISO 交付</span> : ""}
       </div>
       <div className="grid">
+        <div className="cell">
+          <div className="k">所属 SIG</div>
+          <div className="v">
+            {d.sig ? (
+              <a href={`https://atomgit.com/openeuler/community/tree/master/sig/${d.sig}`} target="_blank" rel="noreferrer">{d.sig}</a>
+            ) : "—"}
+          </div>
+        </div>
         <div className="cell"><div className="k">反向依赖</div><div className="v">{g.reverse_deps}</div></div>
         <div className="cell"><div className="k">活跃度指数</div><div className="v">{idx != null ? idx : "—"}</div></div>
         <div className="cell"><div className="k">开放待办 (Issue+PR)</div><div className="v">{d.activity.open_issues + d.activity.open_prs}</div></div>
@@ -91,7 +100,7 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
         <h4>仓库可用性</h4>
         <div className="muted">
           版本来源：{d.latest_repo || "—"}
-          {d.in_iso ? " · 基础 ISO 内置" : ""}
+          {d.in_iso ? " · Offline Standard ISO 内置" : ""}
           {d.has_source ? " · 源码(source)" : ""}
           {d.has_debug ? " · 调试(debuginfo)" : ""}
           {d.in_epol ? " · EPOL" : ""}

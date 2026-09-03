@@ -37,6 +37,8 @@ export interface PackageRow {
   in_iso: boolean;
   iso_baseline: boolean;
   iso_excluded: boolean;
+  iso_desktop: boolean;
+  iso_edge: boolean;
   python: {
     kind: string;
     pypi_name: string;
@@ -94,6 +96,7 @@ export interface PackageDetail {
   summary_full?: string;
   license: string;
   arches: string[];
+  sig?: string;
   activity: {
     monthly: Record<string, { commits: number; prs: number; issues: number }>;
     last_commit: string;
@@ -134,6 +137,8 @@ export interface PackageDetail {
   in_iso: boolean;
   iso_baseline: boolean;
   iso_excluded: boolean;
+  iso_desktop: boolean;
+  iso_edge: boolean;
   python: {
     kind: string;
     pypi_name: string;

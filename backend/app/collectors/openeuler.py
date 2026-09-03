@@ -20,7 +20,7 @@ import re
 
 from app import config
 from app.collectors import repodata_parser
-from app.utils import LOG, http_get, version_compare
+from app.utils import LOG, compare_upstream, http_get, version_compare
 
 LTS_RE = re.compile(r"^openEuler-(?P<ver>\d+\.\d+)-LTS(?:-SP(?P<sp>\d+))?$")
 INNOV_RE = re.compile(r"^openEuler-(?P<ver>\d+\.\d+)(?:-DevStation)?$")
@@ -364,7 +364,7 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
 def collect_stream_versions(stream_id: str) -> dict[str, dict]:
     """Per-stream version + repo tags.
 
-    {source: {version, latest_repo, in_epol,
+    {source: {version, latest_repo, in_os, in_epol,
     in_update, has_source, has_debug}} (aggregated, light).
     """
     inv = collect_stream_inventory(stream_id, full=False)
@@ -372,6 +372,7 @@ def collect_stream_versions(stream_id: str) -> dict[str, dict]:
         name: {
             "version": rec["version"],
             "latest_repo": rec["latest_repo"],
+            "in_os": rec["in_os"],
             "in_epol": rec["in_epol"],
             "in_update": rec["in_update"],
             "has_source": rec["has_source"],
@@ -418,8 +419,11 @@ def collect(streams: dict[str, str] | None = None) -> dict[str, dict]:
             )
             entry["versions"][stream_name] = rec.get("version", "")
             # Repo tags follow whichever stream carries the newest version.
+            # Compare upstream portions only: release tails are per-OS build
+            # counters and must not order streams against each other. On an
+            # upstream tie the later-iterated (newer) stream wins.
             ver = rec.get("version", "")
-            if ver and version_compare(ver, best.get(name, "")) > 0:
+            if ver and compare_upstream(ver, best.get(name, "")) >= 0:
                 best[name] = ver
                 for k in ("has_source", "has_debug", "in_os", "in_epol", "in_update"):
                     entry[k] = rec.get(k, False)

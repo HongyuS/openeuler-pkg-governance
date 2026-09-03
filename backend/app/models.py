@@ -100,10 +100,14 @@ class Package:
     in_epol: bool = False  # present in EPOL (extra packages)
     in_update: bool = False  # present in update (newest patch repo)
     latest_repo: str = ""  # repo holding the newest version
+    # Community ownership: SIG maintaining this source package (community repo).
+    sig: str = ""  # first owner when several SIGs claim the package
     # Official ISO composition tags.
     in_iso: bool = False  # inside the base-installation ISO (OS repo / DevStation list)
-    iso_baseline: bool = False  # explicitly selected by the oemaker comps groups
+    iso_baseline: bool = False  # explicitly selected by the oemaker standard-ISO comps
     iso_excluded: bool = False  # explicitly excluded from the ISO by oemaker rpmlist
+    iso_desktop: bool = False  # selected by the oemaker desktop-ISO comps
+    iso_edge: bool = False  # selected by the oemaker edge-ISO comps
     # Python/pip assessment for pip-module source packages (python-*).
     python: dict[str, Any] = field(default_factory=dict)
     # Node.js/npm assessment for npm-module source packages (nodejs-*).

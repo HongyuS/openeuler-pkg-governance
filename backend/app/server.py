@@ -124,6 +124,11 @@ def _apply_stream(p: dict, lts: str, innov: str) -> dict[str, Any]:
                 ("latest_repo", ""),
                 ("has_source", False),
                 ("has_debug", False),
+                ("in_iso", False),
+                ("iso_baseline", False),
+                ("iso_excluded", False),
+                ("iso_desktop", False),
+                ("iso_edge", False),
             )
         },
     }
@@ -280,9 +285,11 @@ def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
                 "in_epol": r["in_epol"],
                 "in_update": r["in_update"],
                 "latest_repo": r["latest_repo"],
-                "in_iso": p.get("in_iso", False),
-                "iso_baseline": p.get("iso_baseline", False),
-                "iso_excluded": p.get("iso_excluded", False),
+                "in_iso": r["in_iso"],
+                "iso_baseline": r["iso_baseline"],
+                "iso_excluded": r["iso_excluded"],
+                "iso_desktop": r["iso_desktop"],
+                "iso_edge": r["iso_edge"],
                 "python": {
                     k: p.get("python", {}).get(k, "")
                     for k in (
@@ -362,7 +369,18 @@ def get_package(name: str, lts: str = Query(""), innov: str = Query("")) -> dict
             out = dict(p)
             lts, innov = _stream_ids(lts or None, innov or None)
             row = _apply_stream(p, lts, innov)
-            for k in ("has_source", "has_debug", "in_epol", "in_update", "latest_repo"):
+            for k in (
+                "has_source",
+                "has_debug",
+                "in_epol",
+                "in_update",
+                "latest_repo",
+                "in_iso",
+                "iso_baseline",
+                "iso_excluded",
+                "iso_desktop",
+                "iso_edge",
+            ):
                 out[k] = row[k]
             out["open_euler"] = dict(
                 {

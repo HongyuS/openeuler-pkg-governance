@@ -38,18 +38,21 @@ def build_packages(
     npm_profiles: dict[str, dict] | None = None,
     iso_tags: dict[str, dict] | None = None,
     iso_protection: bool = False,
+    sig_map: dict[str, list[str]] | None = None,
 ) -> list[Package]:
     """Produce the full list of Package portraits (already governance-scored).
 
     ``iso_tags`` maps source name -> {"baseline"/"excluded"/"devstation": bool}
     from the oemaker ISO composition lists. ``iso_protection`` keeps ISO
     packages out of the sunset recommendation (they must exit via the official
-    release-management branch process instead).
+    release-management branch process instead). ``sig_map`` maps source name ->
+    owning SIG name(s) from the community repo; the first SIG wins.
     """
     special = special or {}
     pypi_profiles = pypi_profiles or {}
     npm_profiles = npm_profiles or {}
     iso_tags = iso_tags or {}
+    sig_map = sig_map or {}
     data_date = data_date or iso_today()
     sys_python = python_gov.system_python_version(inventory)
 
@@ -109,6 +112,7 @@ def build_packages(
 
         special_note = special.get(name, "")
         tags = iso_tags.get(name, {})
+        owners = sig_map.get(name, [])
         pkg = Package(
             name=name,
             summary=rec.get("summary", ""),
@@ -123,9 +127,12 @@ def build_packages(
             in_epol=rec.get("in_epol", False),
             in_update=rec.get("in_update", False),
             latest_repo=rec.get("latest_repo", ""),
+            sig=owners[0] if owners else "",
             in_iso=bool(rec.get("in_os", False)) or bool(tags.get("devstation", False)),
             iso_baseline=bool(tags.get("baseline", False)),
             iso_excluded=bool(tags.get("excluded", False)),
+            iso_desktop=bool(tags.get("desktop", False)),
+            iso_edge=bool(tags.get("edge", False)),
             activity=signals,
             comparison=comp,
             governance=gov,
@@ -143,7 +150,8 @@ def build_packages(
             gov.disposal = "maintain"
             gov.sunset_candidate = False
             gov.maintenance_notes.append(
-                "基础 ISO 内置：官方交付组件，保留；退出需走 release-management 版本分支变更流程。"
+                "Offline Standard ISO（基础安装 ISO）内置：官方交付组件，保留；"
+                "退出需走 release-management 版本分支变更流程。"
             )
             gov.score = _priority_score(gov, lag_degree=comp.lag_degree, backport=backport)
         packages.append(pkg)

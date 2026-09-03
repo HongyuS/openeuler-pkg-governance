@@ -2,13 +2,16 @@
 
 The oemaker project (atomgit.com/src-openeuler/oemaker, mirrored on GitCode)
 maintains, per release branch, the comps group XMLs used to compose the
-standard ISO, an rpmlist of packages explicitly excluded from it, and the
-DevStation ISO rpmlist. Those lists use binary-RPM names, so they are mapped
-back to source packages through the stream's OS-repo binary->source index.
+standard / desktop / edge ISOs, an rpmlist of packages explicitly excluded
+from them, and the DevStation ISO rpmlist. Those lists use binary-RPM names,
+so they are mapped back to source packages through the stream's OS-repo
+binary->source index.
 
-Exposes three tags per source package:
+Exposes per-stream tags keyed by stream id, plus their union:
 
-* ``baseline``   - selected by the oemaker comps groups (mandatory/default),
+* ``baseline``   - selected by the standard-ISO comps groups (mandatory/default),
+* ``desktop``    - selected by the desktop-ISO comps groups,
+* ``edge``       - selected by the edge-ISO comps groups,
 * ``excluded``   - explicitly excluded from the ISO by the oemaker rpmlist,
 * ``devstation`` - inside the DevStation ISO rpmlist.
 """
@@ -144,23 +147,33 @@ def binary_source_map(stream_id: str) -> dict[str, str]:
     return {b: sname for sname, rec in src.items() for b in rec.get("binaries", [])}
 
 
-def collect(streams: dict[str, str]) -> dict:
-    """Collect ISO composition tags for the default streams.
+def collect(streams: list[str] | dict[str, str]) -> dict:
+    """Collect ISO composition tags for every given stream id.
 
-    Returns ``{"streams": {stream_name: {...counts...}}, "tags": {source: {
-    baseline/excluded/devstation: True}}}``. Binary names without a known
-    source mapping fall back to their own name (most are source == binary).
+    ``streams`` is either a list of stream ids or a {stream_name: stream_id}
+    mapping (only the ids matter). Returns ``{"streams": {stream_id: {...counts
+    ...}}, "stream_tags": {stream_id: {source: {...flags...}}}, "tags": {source:
+    {...union flags...}}}``. Binary names without a known source mapping fall
+    back to their own name (most are source == binary).
     """
+    ids = list(streams.values()) if isinstance(streams, dict) else list(streams)
     known = branches()
     tags: dict[str, dict] = {}
+    stream_tags: dict[str, dict] = {}
     report: dict[str, dict] = {}
-    for stream_name, stream_id in streams.items():
+    for stream_id in ids:
         branch = resolve_branch(stream_id, known)
         if not branch:
             LOG.info("oemaker: no branch matches stream %s", stream_id)
             continue
         baseline_bin = parse_comps(_fetch_file(branch, "normal_x86_64.xml")) + list(
             parse_comps(_fetch_file(branch, "normal_aarch64.xml"))
+        )
+        desktop_bin = parse_comps(_fetch_file(branch, "desktop_normal_x86_64.xml")) + list(
+            parse_comps(_fetch_file(branch, "desktop_normal_aarch64.xml"))
+        )
+        edge_bin = parse_comps(_fetch_file(branch, "edge_normal_x86_64.xml")) + list(
+            parse_comps(_fetch_file(branch, "edge_normal_aarch64.xml"))
         )
         excluded_bin = parse_rpmlist(_fetch_file(branch, "rpmlist.xml"))
         devstation_bin: list[str] = []
@@ -170,22 +183,27 @@ def collect(streams: dict[str, str]) -> dict:
             )
         b2s = binary_source_map(stream_id)
         baseline_src = {b2s.get(n, n) for n in baseline_bin}
+        desktop_src = {b2s.get(n, n) for n in desktop_bin}
+        edge_src = {b2s.get(n, n) for n in edge_bin}
         excluded_src = {b2s.get(n, n) for n in excluded_bin}
         devstation_src = {b2s.get(n, n) for n in devstation_bin}
-        for sname in baseline_src:
-            tags.setdefault(sname, {})["baseline"] = True
-        for sname in excluded_src:
-            tags.setdefault(sname, {})["excluded"] = True
-        for sname in devstation_src:
-            tags.setdefault(sname, {})["devstation"] = True
-        report[stream_name] = {
-            "branch": branch,
-            "baseline_binaries": len(set(baseline_bin)),
-            "excluded_binaries": len(set(excluded_bin)),
-            "devstation_binaries": len(set(devstation_bin)),
-            "baseline_sources": len(baseline_src),
-            "excluded_sources": len(excluded_src),
-            "devstation_sources": len(devstation_src),
+        flags_of = {
+            "baseline": baseline_src,
+            "desktop": desktop_src,
+            "edge": edge_src,
+            "excluded": excluded_src,
+            "devstation": devstation_src,
         }
-        LOG.info("oemaker: ISO tags for %s (branch %s): %s", stream_id, branch, report[stream_name])
-    return {"streams": report, "tags": tags}
+        per_stream: dict[str, dict] = {}
+        for flag, sources in flags_of.items():
+            for sname in sources:
+                per_stream.setdefault(sname, {})[flag] = True
+                tags.setdefault(sname, {})[flag] = True
+        stream_tags[stream_id] = per_stream
+        report[stream_id] = {
+            "branch": branch,
+            **{f"{flag}_binaries": len(set(names)) for flag, names in flags_of.items()},
+            **{f"{flag}_sources": len(sources) for flag, sources in flags_of.items()},
+        }
+        LOG.info("oemaker: ISO tags for %s (branch %s): %s", stream_id, branch, report[stream_id])
+    return {"streams": report, "stream_tags": stream_tags, "tags": tags}

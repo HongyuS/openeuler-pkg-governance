@@ -49,17 +49,21 @@ def parse_version(version: str) -> tuple:
         ver, rel = rest, ""
 
     def _tok(part: str) -> tuple:
-        # Split into numeric and alpha tokens; numeric compare numerically.
-        tokens = re.split(r"([0-9]+|[A-Za-z]+)", part)
+        # Token levels: `~` < end-of-string < punctuation/alpha < numeric, so
+        # `1.2.3~rc1 < 1.2.3` (rpm/dpkg pre-release semantics) while extra
+        # alpha segments still sort after the base version.
+        tokens = re.split(r"([0-9]+|[A-Za-z]+|~)", part)
         out: list[tuple[int, str | int]] = []
         for t in tokens:
             if not t:
                 continue
-            if t.isdigit():
-                out.append((0, int(t)))
+            if t == "~":
+                out.append((-2, ""))
+            elif t.isdigit():
+                out.append((2, int(t)))
             else:
-                # tilde sorts before any real token
                 out.append((1, t.lower()))
+        out.append((-1, ""))  # end-of-string sentinel: `~` sorts below it
         return tuple(out)
 
     return (epoch, _tok(ver), _tok(rel))
@@ -79,10 +83,16 @@ def compare_versions_str(a: str, b: str) -> int:
     return version_compare(a, b)
 
 
+_REPACK_SUFFIX_RE = re.compile(r"[+~](?:dfsg|dsfg|ds|repack)\d*$", re.IGNORECASE)
+
+
 def upstream_version(version: str) -> str:
     """Return only the epoch:version portion (upstream).
 
-    Dropping the distro release suffix so cross-distribution comparisons are meaningful.
+    Dropping the distro release suffix so cross-distribution comparisons are
+    meaningful. Debian/Ubuntu source-repack markers (``+dfsg1``, ``~ds``,
+    ``+repack0``) do not change the upstream version and are stripped too;
+    ``X+reallyY`` means the real upstream is ``Y``.
     """
     if not version:
         return ""
@@ -93,11 +103,22 @@ def upstream_version(version: str) -> str:
         epoch, rest = "0", text
     # Drop the release (everything after the last '-' in the upstream portion).
     upstream = rest.split("-")[0] if "-" in rest else rest
+    if "+really" in upstream:
+        upstream = upstream.rsplit("+really", 1)[-1]
+    prev = None
+    while prev != upstream:
+        prev = upstream
+        upstream = _REPACK_SUFFIX_RE.sub("", upstream)
     return f"{epoch}:{upstream}"
 
 
 def compare_upstream(a: str, b: str) -> int:
-    """Cross-distribution upstream compare (-1/0/1)."""
+    """Cross-distribution upstream compare (-1/0/1).
+
+    Epoch is dropped: it is distro-local ordering metadata (forced bumps to
+    keep a distro's own history monotonic) and carries no upstream-newness
+    signal, so keeping it would misorder cross-distro pairs.
+    """
     if not a and not b:
         return 0
     if not a:
@@ -109,7 +130,7 @@ def compare_upstream(a: str, b: str) -> int:
         pb = parse_version(upstream_version(b))
     except Exception:  # ruff: ignore[blind-except]
         return (a > b) - (a < b)
-    return (pa[:2] > pb[:2]) - (pa[:2] < pb[:2])
+    return (pa[1] > pb[1]) - (pa[1] < pb[1])
 
 
 def strip_source_suffix(version: str) -> str:

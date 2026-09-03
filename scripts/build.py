@@ -38,6 +38,7 @@ from app.collectors import (  # ruff: ignore[module-import-not-at-top-of-file]
     openeuler,
     pypi,
     repos,
+    sig,
     ubuntu,
 )
 from app.engine import pipeline  # ruff: ignore[module-import-not-at-top-of-file]
@@ -66,6 +67,19 @@ def pick_activity_targets(inventory: dict[str, dict], limit: int) -> list[str]:
     return selected[:limit] if limit else selected
 
 
+def collect_sig_map(disabled: bool) -> tuple[dict[str, list[str]], dict[str, dict]]:
+    """SIG ownership map + per-SIG metadata (empty when --no-sig or on failure)."""
+    if disabled:
+        return {}, {}
+    LOG.info("collecting SIG ownership map (community repo)…")
+    try:
+        data = sig.collect()
+        return data["pkg_sig"], data["sigs"]
+    except Exception as exc:  # ruff: ignore[blind-except]
+        LOG.warning("sig collection failed: %s", exc)
+        return {}, {}
+
+
 def main() -> None:
     """Run the full collection + governance pipeline and write packages.json."""
     ap = argparse.ArgumentParser()
@@ -73,6 +87,7 @@ def main() -> None:
     ap.add_argument("--no-pypi", action="store_true")
     ap.add_argument("--no-npm", action="store_true")
     ap.add_argument("--no-oemaker", action="store_true")
+    ap.add_argument("--no-sig", action="store_true")
     ap.add_argument("--activity-limit", type=int, default=config.ACTIVITY_SAMPLE_LIMIT)
     args = ap.parse_args()
 
@@ -81,7 +96,7 @@ def main() -> None:
     default = openeuler.discover_latest()
     LOG.info("default pair: %s", default)
 
-    # 1) Per-stream version matrix.
+    # 1) Per-stream version matrix (persisted after the ISO-tag merge below).
     stream_versions: dict[str, dict[str, dict]] = {}
     sv_cache = config.STREAM_VERSIONS_CACHE
     if sv_cache.exists():
@@ -92,7 +107,9 @@ def main() -> None:
     for s in catalog:
         sid = s["id"]
         cached = stream_versions.get(sid)
-        if cached and all(isinstance(v, dict) for v in cached.values()):
+        # Entries must carry the in_os tag (added 2026-09); older caches are
+        # re-collected so per-stream ISO tags stay consistent.
+        if cached and all(isinstance(v, dict) and "in_os" in v for v in cached.values()):
             continue
         LOG.info("collecting stream versions for %s …", sid)
         try:
@@ -100,8 +117,6 @@ def main() -> None:
         except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("stream %s failed: %s", sid, exc)
             stream_versions[sid] = {}
-    sv_cache.parent.mkdir(parents=True, exist_ok=True)
-    sv_cache.write_text(json.dumps(stream_versions, ensure_ascii=False))
 
     # 2) Canonical (default-pair) full inventory for the governance graph.
     LOG.info("collecting canonical openEuler inventory (dependency graph)…")
@@ -109,14 +124,36 @@ def main() -> None:
     LOG.info("canonical inventory: %d source packages", len(inventory))
     _write(config.CACHE_DIR / "inventory.json", {"streams": default, "packages": inventory})
 
-    # 2.5) Official ISO composition lists (oemaker, per release branch).
+    # 2.5) Official ISO composition lists (oemaker, per release branch) for
+    # every selectable stream, merged into the stream-version matrix so the
+    # ISO tags follow the stream selected in the UI.
     iso_tags: dict[str, dict] = {}
+    stream_tags: dict[str, dict] = {}
     if not args.no_oemaker:
         LOG.info("collecting official ISO package lists (oemaker)…")
         try:
-            iso_tags = oemaker.collect(default).get("tags", {})
+            iso_data = oemaker.collect([s["id"] for s in catalog])
+            iso_tags = iso_data.get("tags", {})
+            stream_tags = iso_data.get("stream_tags", {})
         except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("oemaker collection failed: %s", exc)
+    for sid, recs in stream_versions.items():
+        stags = stream_tags.get(sid, {})
+        for sname, rec in recs.items():
+            if not isinstance(rec, dict):
+                continue
+            flags = stags.get(sname, {})
+            rec["in_iso"] = bool(rec.get("in_os")) or bool(flags.get("devstation"))
+            if flags:
+                rec["iso_baseline"] = bool(flags.get("baseline"))
+                rec["iso_excluded"] = bool(flags.get("excluded"))
+                rec["iso_desktop"] = bool(flags.get("desktop"))
+                rec["iso_edge"] = bool(flags.get("edge"))
+    sv_cache.parent.mkdir(parents=True, exist_ok=True)
+    sv_cache.write_text(json.dumps(stream_versions, ensure_ascii=False))
+
+    # 2.6) SIG ownership map (community repo sig-info.yaml, per-SIG file cache).
+    sig_map, sigs_meta = collect_sig_map(args.no_sig)
 
     # 3) Ubuntu baseline.
     LOG.info("collecting Ubuntu baseline versions…")
@@ -160,6 +197,7 @@ def main() -> None:
         npm_profiles=npm_profiles,
         iso_tags=iso_tags,
         iso_protection=bool(rules.get("sunset_protection", {}).get("iso_baseline", False)),
+        sig_map=sig_map,
     )
 
     meta: dict[str, Any] = {
@@ -183,6 +221,7 @@ def main() -> None:
         "activity_measured": len([p for p in packages if p.activity.source == "measured"]),
         "activity_sampled": len(activity),
         "total_sources": len(packages),
+        "sigs": sigs_meta,
     }
     _write(config.PACKAGES_CACHE, {"meta": meta, "packages": [p.to_dict() for p in packages]})
     LOG.info("WROTE %s", config.PACKAGES_CACHE)

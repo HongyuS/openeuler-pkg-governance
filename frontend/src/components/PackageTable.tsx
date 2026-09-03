@@ -118,7 +118,7 @@ export function PackageTable(props: {
           options={[{ id: "", label: "建议（全部）" }, { id: "upgrade", label: "升级" }, { id: "maintain", label: "维持" }, { id: "sunset", label: "日落" }]} />
         <label className="ck"><input type="checkbox" checked={lag} onChange={(e) => { setLag(e.target.checked); setPage(1); }} /> 基线滞后</label>
         <label className="ck"><input type="checkbox" checked={sunset} onChange={(e) => { setSunset(e.target.checked); setPage(1); }} /> 日落候选</label>
-        <label className="ck" title="基础安装 ISO 内置（官方交付组件）"><input type="checkbox" checked={inIso} onChange={(e) => { setInIso(e.target.checked); setPage(1); }} /> ISO 内置</label>
+        <label className="ck" title="官网 Offline Standard ISO（基础安装 ISO）内置组件；DevStation 流下含 DevStation ISO 内置"><input type="checkbox" checked={inIso} onChange={(e) => { setInIso(e.target.checked); setPage(1); }} /> Standard ISO</label>
         <label className="ck"><input type="checkbox" checked={measured} onChange={(e) => { setMeasured(e.target.checked); setPage(1); }} /> 已测活跃度</label>
         <span className="total-inline">共 {filtered.length.toLocaleString()} 条</span>
       </div>
@@ -214,7 +214,7 @@ function RepoTag(props: { row: PackageRow }) {
   const tags: string[] = [];
   if (py) tags.push("pip");
   if (npm) tags.push("npm");
-  if (r.in_iso) tags.push("ISO");
+  if (r.in_iso) tags.push("Standard");
   if (r.in_update) tags.push("update");
   if (r.in_epol) tags.push("EPOL");
   if (r.has_debug) tags.push("debug");
