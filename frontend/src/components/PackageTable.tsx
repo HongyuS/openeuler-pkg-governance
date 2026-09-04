@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Grade, PackageRow, PLvl } from "../types";
 import { OSelect } from "./OSelect";
 
@@ -51,6 +51,8 @@ export function PackageTable(props: {
   const [per, setPer] = useState(100);
   const deferredQ = useDeferredValue(q);
   const panelRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
 
   /** 翻页后滚回表格顶部（避开吸顶的 header） */
   const goPage = (n: number) => {
@@ -60,6 +62,23 @@ export function PackageTable(props: {
       if (window.scrollY > top) window.scrollTo({ top, behavior: "smooth" });
     }
   };
+
+  /**
+   * 表头条与表体的横向滚动同步。表头条独立于滚动容器才能原生 sticky 吸顶（容器内
+   * overflow-x 会让纵向 sticky 失效），其横向位置由 JS 镜像 scrollLeft（overflow:hidden
+   * 仍可编程滚动）；条内固定列 th 仍是原生 sticky，不经过 JS。
+   */
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    const head = headRef.current;
+    if (!wrap || !head) return;
+    let raf = 0;
+    const sync = () => { head.scrollLeft = wrap.scrollLeft; };
+    const onScroll = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(sync); };
+    wrap.addEventListener("scroll", onScroll, { passive: true });
+    sync();
+    return () => { cancelAnimationFrame(raf); wrap.removeEventListener("scroll", onScroll); };
+  }, []);
 
   const filtered = useMemo(() => {
     const query = deferredQ.trim().toLowerCase();
@@ -128,10 +147,42 @@ export function PackageTable(props: {
     setPage(1);
   };
 
-  const sTh = (label: string, key: SortKey, center = false, title?: string) => (
-    <th key={label} className={`sortable${center ? " center" : ""}`} title={title} onClick={() => toggleSort(key)}>
+  const sTh = (label: string, key: SortKey, center = false, title?: string, cls = "") => (
+    <th key={label} className={`sortable${center ? " center" : ""}${cls}`} title={title} onClick={() => toggleSort(key)}>
       {label}{sort === key ? (order === "asc" ? " ↑" : " ↓") : ""}
     </th>
+  );
+
+  const cols = (
+    <colgroup>
+      <col />
+      <col style={{ width: 64 }} />
+      <col style={{ width: 72 }} />
+      <col style={{ width: 64 }} />
+      <col style={{ width: 165 }} />
+      <col style={{ width: 165 }} />
+      <col style={{ width: 165 }} />
+      <col style={{ width: 165 }} />
+      <col style={{ width: 80 }} />
+      <col style={{ width: 72 }} />
+      <col style={{ width: 112 }} />
+    </colgroup>
+  );
+
+  const headRow = (
+    <tr>
+      {sTh("包名", "name", false, undefined, " stk-l")}
+      {sTh("分级", "p_level", true)}
+      {sTh("活跃度", "grade", true)}
+      {sTh("优先级", "score", true)}
+      <th>openEuler LTS</th>
+      <th>openEuler 创新</th>
+      <th>Ubuntu LTS</th>
+      <th>Ubuntu 前沿</th>
+      <th className="center stk-r stk-r3" title="openEuler 版本与 Ubuntu 基线的对比结果">基线对比</th>
+      <th className="center stk-r stk-r2">建议</th>
+      {sTh("最近提交", "last_commit", false, undefined, " stk-r")}
+    </tr>
   );
 
   return (
@@ -154,40 +205,19 @@ export function PackageTable(props: {
         <button className="btn ghost" disabled={!filtered.length} onClick={exportCsv}>导出 CSV</button>
       </div>
 
-      <div className="table-wrap">
+      <div className="thead-outer" ref={headRef}>
         <table className="pkg-table">
-          <colgroup>
-            <col />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 72 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 165 }} />
-            <col style={{ width: 165 }} />
-            <col style={{ width: 165 }} />
-            <col style={{ width: 165 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 72 }} />
-            <col style={{ width: 112 }} />
-          </colgroup>
-          <thead>
-            <tr>
-              {sTh("包名", "name")}
-              {sTh("分级", "p_level", true)}
-              {sTh("活跃度", "grade", true)}
-              {sTh("优先级", "score", true)}
-              <th>openEuler LTS</th>
-              <th>openEuler 创新</th>
-              <th>Ubuntu LTS</th>
-              <th>Ubuntu 前沿</th>
-              <th className="center" title="openEuler 版本与 Ubuntu 基线的对比结果">基线对比</th>
-              <th className="center">建议</th>
-              {sTh("最近提交", "last_commit")}
-            </tr>
-          </thead>
+          {cols}
+          <thead>{headRow}</thead>
+        </table>
+      </div>
+      <div className="table-wrap" ref={wrapRef}>
+        <table className="pkg-table">
+          {cols}
           <tbody>
             {slice.map((r) => (
               <tr key={r.name} onClick={() => props.onOpen(r.name)}>
-                <td className="pkg-cell">
+                <td className="pkg-cell stk-l">
                   <strong className="pkg-name" title={r.name}>{r.name}</strong>
                   <div className="pkg-summary" title={r.summary}>{r.summary}</div>
                   <RepoTag row={r} />
@@ -203,9 +233,9 @@ export function PackageTable(props: {
                 <td className="mono ver" title={r.versions.openEuler_innovation || ""}>{ver(r.versions.openEuler_innovation)}</td>
                 <td className="mono ver" title={r.versions.ubuntu_LTS || ""}>{ver(r.versions.ubuntu_LTS)}</td>
                 <td className="mono ver" title={r.versions.ubuntu_interim || ""}>{ver(r.versions.ubuntu_interim)}</td>
-                <td className="center">{r.lagging ? <span className="flag lag">滞后</span> : <span className="flag good">同步</span>}</td>
-                <td className="center">{dispBadge(r.disposal)}</td>
-                <td className="mono">{(r.last_commit || "—").slice(0, 10)}</td>
+                <td className="center stk-r stk-r3">{r.lagging ? <span className="flag lag">滞后</span> : <span className="flag good">同步</span>}</td>
+                <td className="center stk-r stk-r2">{dispBadge(r.disposal)}</td>
+                <td className="mono stk-r">{(r.last_commit || "—").slice(0, 10)}</td>
               </tr>
             ))}
           </tbody>

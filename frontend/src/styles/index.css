@@ -191,17 +191,30 @@ a:hover { text-decoration: none; }
 .ck { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12px; cursor: pointer; }
 .ck input { accent-color: var(--oe-blue); }
 
-/* flat full-width table: page-level scroll, sticky thead under the filters bar */
+/* 表格区只横向滚动：包名列固定左侧，基线对比/建议/最近提交固定右侧，中间列滑动；
+   纵向随页面滚动。表头拆为独立的 .thead-outer 条：滚动容器内 overflow-x 会让
+   纵向 sticky 失效，独立后相对视口原生吸顶（无 JS 补偿、无抖动），横向滚动由
+   PackageTable 镜像 scrollLeft 同步 */
+.thead-outer {
+  position: sticky; top: calc(var(--header-h) + var(--filters-h)); z-index: 9;
+  overflow: hidden;
+}
+.table-wrap { overflow-x: auto; }
 .pkg-table {
-  width: 100%; min-width: 1256px; table-layout: fixed;
+  width: 100%; min-width: 1364px; table-layout: fixed;
   border-collapse: separate; border-spacing: 0; background: var(--surface);
 }
 .pkg-table thead th {
-  position: sticky; top: calc(var(--header-h) + var(--filters-h)); z-index: 10;
   text-align: left; background: var(--oe-head-bg); color: #000;
   font-weight: 500; font-size: 14px; padding: 12px 10px; height: 46px;
   border-bottom: 1px solid var(--line); white-space: nowrap; user-select: none;
 }
+/* 固定列：stk-r2/r3 的 right 偏移 = 其右侧固定列宽之和（建议72+提交112） */
+.pkg-table .stk-l { position: sticky; left: 0; z-index: 2; box-shadow: inset -1px 0 0 var(--line); }
+.pkg-table .stk-r { position: sticky; right: 0; z-index: 2; box-shadow: inset 1px 0 0 var(--line); }
+.pkg-table .stk-r2 { right: 112px; }
+.pkg-table .stk-r3 { right: 184px; }
+.pkg-table thead th.stk-l, .pkg-table thead th.stk-r { z-index: 12; }
 .pkg-table thead th.sortable { cursor: pointer; }
 .pkg-table thead th.sortable:hover { color: var(--oe-blue); }
 .pkg-table tbody td {
@@ -337,5 +350,5 @@ a:hover { text-decoration: none; }
   .banner-inner { padding: 28px 16px 24px; }
   .container { padding: 12px 16px 40px; }
   .filters { position: static; }
-  .pkg-table thead th { position: static; }
+  .thead-outer { position: static; }
 }
