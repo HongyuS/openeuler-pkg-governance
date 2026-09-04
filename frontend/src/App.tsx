@@ -26,10 +26,11 @@ export default function App() {
     }
   }, [d.lts, d.innov]);
 
-  const selectedLabel = useMemo(() => {
+  const streamLabel = useMemo(() => {
     const find = (id: string) => d.catalog.find((s) => s.id === id)?.label || id;
-    return `LTS: ${find(d.lts)} · 创新: ${find(d.innov)}`;
+    return { lts: find(d.lts), innov: find(d.innov) };
   }, [d.catalog, d.lts, d.innov]);
+  const selectedLabel = `LTS: ${streamLabel.lts} · 创新: ${streamLabel.innov}`;
 
   const dataDate = d.digest?.meta.data_date || "";
   const baselines = d.digest?.meta.baselines || {};
@@ -69,7 +70,8 @@ export default function App() {
               dist={d.digest.summary.distributions}
               topLagging={d.digest.packages.filter((p) => p.lagging).sort((a, b) => b.score - a.score)}
             />
-            <PackageTable packages={d.digest.packages} loading={d.loading} onOpen={openDetail} />
+            <PackageTable packages={d.digest.packages} loading={d.loading} onOpen={openDetail}
+              ltsLabel={streamLabel.lts} innovLabel={streamLabel.innov} />
           </>
         ) : null}
 

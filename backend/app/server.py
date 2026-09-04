@@ -276,6 +276,7 @@ def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
                 "lag_behind_ubuntu_interim": r["lag_behind_ubuntu_interim"],
                 "sunset_candidate": p.get("governance", {}).get("sunset_candidate"),
                 "special": p.get("special"),
+                "sig": p.get("sig", ""),
                 "reverse_deps": p.get("governance", {}).get("reverse_deps"),
                 "score": p.get("governance", {}).get("score"),
                 "effort_pd": p.get("governance", {}).get("effort_person_days"),

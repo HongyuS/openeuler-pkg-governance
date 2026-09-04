@@ -25,6 +25,7 @@ export interface PackageRow {
   lag_behind_ubuntu_interim: boolean;
   sunset_candidate: boolean;
   special: boolean;
+  sig: string;
   reverse_deps: number;
   score: number;
   effort_pd: number;

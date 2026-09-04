@@ -35,6 +35,8 @@ export function PackageTable(props: {
   packages: PackageRow[];
   loading: boolean;
   onOpen: (name: string) => void;
+  ltsLabel: string;
+  innovLabel: string;
 }) {
   const [q, setQ] = useState("");
   const [p, setP] = useState("");
@@ -42,7 +44,6 @@ export function PackageTable(props: {
   const [disposal, setDisposal] = useState("");
   const [lag, setLag] = useState(false);
   const [sunset, setSunset] = useState(false);
-  const [inIso, setInIso] = useState(false);
   const [measured, setMeasured] = useState(false);
   const [sort, setSort] = useState<SortKey>("score");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
@@ -69,7 +70,6 @@ export function PackageTable(props: {
     if (disposal) rows = rows.filter((r) => r.disposal === disposal);
     if (lag) rows = rows.filter((r) => r.lagging);
     if (sunset) rows = rows.filter((r) => r.sunset_candidate);
-    if (inIso) rows = rows.filter((r) => r.in_iso);
     if (measured) rows = rows.filter((r) => r.grade !== "N/A");
     const dir = order === "asc" ? 1 : -1;
     rows.sort((a, b) => {
@@ -85,7 +85,38 @@ export function PackageTable(props: {
       }
     });
     return rows;
-  }, [props.packages, deferredQ, p, grade, disposal, lag, sunset, inIso, measured, sort, order]);
+  }, [props.packages, deferredQ, p, grade, disposal, lag, sunset, measured, sort, order]);
+
+  /** 导出当前筛选（含排序）结果；BOM 防止 Excel 打开中文乱码 */
+  const exportCsv = () => {
+    const esc = (v: string | number) => {
+      const s = String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = ["包名", props.ltsLabel, props.innovLabel, "所属SIG", "最后提交时间", "反向依赖数"];
+    const lines = [header.map(esc).join(",")];
+    for (const r of filtered) {
+      lines.push(
+        [
+          r.name,
+          ver(r.versions.openEuler_LTS),
+          ver(r.versions.openEuler_innovation),
+          r.sig,
+          (r.last_commit || "").slice(0, 10),
+          r.reverse_deps,
+        ]
+          .map(esc)
+          .join(","),
+      );
+    }
+    const bom = String.fromCharCode(0xfeff);
+    const blob = new Blob([bom + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `packages-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   const pages = Math.max(1, Math.ceil(filtered.length / per));
   const cur = Math.min(page, pages);
@@ -118,9 +149,9 @@ export function PackageTable(props: {
           options={[{ id: "", label: "建议（全部）" }, { id: "upgrade", label: "升级" }, { id: "maintain", label: "维持" }, { id: "sunset", label: "日落" }]} />
         <label className="ck"><input type="checkbox" checked={lag} onChange={(e) => { setLag(e.target.checked); setPage(1); }} /> 基线滞后</label>
         <label className="ck"><input type="checkbox" checked={sunset} onChange={(e) => { setSunset(e.target.checked); setPage(1); }} /> 日落候选</label>
-        <label className="ck" title="官网 Offline Standard ISO（基础安装 ISO）内置组件；DevStation 流下含 DevStation ISO 内置"><input type="checkbox" checked={inIso} onChange={(e) => { setInIso(e.target.checked); setPage(1); }} /> Standard ISO</label>
         <label className="ck"><input type="checkbox" checked={measured} onChange={(e) => { setMeasured(e.target.checked); setPage(1); }} /> 已测活跃度</label>
         <span className="total-inline">共 {filtered.length.toLocaleString()} 条</span>
+        <button className="btn ghost" disabled={!filtered.length} onClick={exportCsv}>导出 CSV</button>
       </div>
 
       <div className="table-wrap">
