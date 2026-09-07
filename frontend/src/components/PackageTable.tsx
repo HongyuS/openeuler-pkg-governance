@@ -18,7 +18,9 @@ function prioCls(s: number) {
 
 function pageCluster(page: number, pages: number) {
   const out: number[] = [];
-  const add = (n: number) => { if (!out.includes(n) && n >= 1 && n <= pages) out.push(n); };
+  const add = (n: number) => {
+    if (!out.includes(n) && n >= 1 && n <= pages) out.push(n);
+  };
   add(1);
   for (let p = page - 1; p <= page + 1; p++) add(p);
   add(pages);
@@ -58,7 +60,8 @@ export function PackageTable(props: {
   const goPage = (n: number) => {
     setPage(n);
     if (panelRef.current) {
-      const top = panelRef.current.getBoundingClientRect().top + window.scrollY - 88;
+      const top =
+        panelRef.current.getBoundingClientRect().top + window.scrollY - 88;
       if (window.scrollY > top) window.scrollTo({ top, behavior: "smooth" });
     }
   };
@@ -73,17 +76,30 @@ export function PackageTable(props: {
     const head = headRef.current;
     if (!wrap || !head) return;
     let raf = 0;
-    const sync = () => { head.scrollLeft = wrap.scrollLeft; };
-    const onScroll = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(sync); };
+    const sync = () => {
+      head.scrollLeft = wrap.scrollLeft;
+    };
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(sync);
+    };
     wrap.addEventListener("scroll", onScroll, { passive: true });
     sync();
-    return () => { cancelAnimationFrame(raf); wrap.removeEventListener("scroll", onScroll); };
+    return () => {
+      cancelAnimationFrame(raf);
+      wrap.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   const filtered = useMemo(() => {
     const query = deferredQ.trim().toLowerCase();
     let rows = props.packages.slice();
-    if (query) rows = rows.filter((r) => r.name.toLowerCase().includes(query) || r.summary.toLowerCase().includes(query));
+    if (query)
+      rows = rows.filter(
+        (r) =>
+          r.name.toLowerCase().includes(query) ||
+          r.summary.toLowerCase().includes(query),
+      );
     if (p) rows = rows.filter((r) => r.p_level === p);
     if (grade) rows = rows.filter((r) => r.grade === grade);
     if (disposal) rows = rows.filter((r) => r.disposal === disposal);
@@ -93,18 +109,34 @@ export function PackageTable(props: {
     const dir = order === "asc" ? 1 : -1;
     rows.sort((a, b) => {
       switch (sort) {
-        case "name": return a.name.localeCompare(b.name) * dir;
-        case "grade": return (gradeRank[a.grade] - gradeRank[b.grade]) * dir;
-        case "p_level": return (pRank[a.p_level] - pRank[b.p_level]) * dir;
+        case "name":
+          return a.name.localeCompare(b.name) * dir;
+        case "grade":
+          return (gradeRank[a.grade] - gradeRank[b.grade]) * dir;
+        case "p_level":
+          return (pRank[a.p_level] - pRank[b.p_level]) * dir;
         case "last_commit": {
-          const x = a.last_commit || "", y = b.last_commit || "";
+          const x = a.last_commit || "",
+            y = b.last_commit || "";
           return (x < y ? -1 : x > y ? 1 : 0) * dir;
         }
-        default: return (a.score - b.score) * dir;
+        default:
+          return (a.score - b.score) * dir;
       }
     });
     return rows;
-  }, [props.packages, deferredQ, p, grade, disposal, lag, sunset, measured, sort, order]);
+  }, [
+    props.packages,
+    deferredQ,
+    p,
+    grade,
+    disposal,
+    lag,
+    sunset,
+    measured,
+    sort,
+    order,
+  ]);
 
   /** 导出当前筛选（含排序）结果；BOM 防止 Excel 打开中文乱码 */
   const exportCsv = () => {
@@ -112,7 +144,15 @@ export function PackageTable(props: {
       const s = String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = ["包名", props.ltsLabel, props.innovLabel, "所属SIG", "最后提交时间", "反向依赖数"];
+    const header = [
+      "包名",
+      props.ltsLabel,
+      props.innovLabel,
+      "所属SIG",
+      "最后提交时间",
+      "反向依赖数",
+      "src仓库",
+    ];
     const lines = [header.map(esc).join(",")];
     for (const r of filtered) {
       lines.push(
@@ -123,13 +163,16 @@ export function PackageTable(props: {
           r.sig,
           (r.last_commit || "").slice(0, 10),
           r.reverse_deps,
+          `https://atomgit.com/src-openeuler/${r.name}`,
         ]
           .map(esc)
           .join(","),
       );
     }
     const bom = String.fromCharCode(0xfeff);
-    const blob = new Blob([bom + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([bom + lines.join("\n")], {
+      type: "text/csv;charset=utf-8",
+    });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `packages-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -143,13 +186,28 @@ export function PackageTable(props: {
 
   const toggleSort = (k: SortKey) => {
     if (sort === k) setOrder(order === "asc" ? "desc" : "asc");
-    else { setSort(k); setOrder(k === "name" ? "asc" : "desc"); }
+    else {
+      setSort(k);
+      setOrder(k === "name" ? "asc" : "desc");
+    }
     setPage(1);
   };
 
-  const sTh = (label: string, key: SortKey, center = false, title?: string, cls = "") => (
-    <th key={label} className={`sortable${center ? " center" : ""}${cls}`} title={title} onClick={() => toggleSort(key)}>
-      {label}{sort === key ? (order === "asc" ? " ↑" : " ↓") : ""}
+  const sTh = (
+    label: string,
+    key: SortKey,
+    center = false,
+    title?: string,
+    cls = "",
+  ) => (
+    <th
+      key={label}
+      className={`sortable${center ? " center" : ""}${cls}`}
+      title={title}
+      onClick={() => toggleSort(key)}
+    >
+      {label}
+      {sort === key ? (order === "asc" ? " ↑" : " ↓") : ""}
     </th>
   );
 
@@ -179,7 +237,12 @@ export function PackageTable(props: {
       <th>openEuler 创新</th>
       <th>Ubuntu LTS</th>
       <th>Ubuntu 前沿</th>
-      <th className="center stk-r stk-r3" title="openEuler 版本与 Ubuntu 基线的对比结果">基线对比</th>
+      <th
+        className="center stk-r stk-r3"
+        title="openEuler 版本与 Ubuntu 基线的对比结果"
+      >
+        基线对比
+      </th>
       <th className="center stk-r stk-r2">建议</th>
       {sTh("最近提交", "last_commit", false, undefined, " stk-r")}
     </tr>
@@ -189,20 +252,115 @@ export function PackageTable(props: {
     <div className="panel" ref={panelRef}>
       <div className="filters">
         <span className="search-box">
-          <input type="search" placeholder="搜索包名 / 摘要…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
-          {q ? <button className="clear" title="清除" onClick={() => { setQ(""); setPage(1); }}>✕</button> : null}
+          <input
+            type="search"
+            placeholder="搜索包名 / 摘要…"
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setPage(1);
+            }}
+          />
+          {q ? (
+            <button
+              className="clear"
+              title="清除"
+              onClick={() => {
+                setQ("");
+                setPage(1);
+              }}
+            >
+              ✕
+            </button>
+          ) : null}
         </span>
-        <OSelect value={p} minWidth={124} onChange={(v) => { setP(v); setPage(1); }}
-          options={[{ id: "", label: "分级（全部）" }, { id: "P0", label: "P0" }, { id: "P1", label: "P1" }, { id: "P2", label: "P2" }]} />
-        <OSelect value={grade} minWidth={136} onChange={(v) => { setGrade(v); setPage(1); }}
-          options={[{ id: "", label: "活跃度（全部）" }, { id: "A", label: "A" }, { id: "B", label: "B" }, { id: "C", label: "C" }, { id: "D", label: "D" }, { id: "N/A", label: "N/A" }]} />
-        <OSelect value={disposal} minWidth={124} onChange={(v) => { setDisposal(v); setPage(1); }}
-          options={[{ id: "", label: "建议（全部）" }, { id: "upgrade", label: "升级" }, { id: "maintain", label: "维持" }, { id: "sunset", label: "日落" }]} />
-        <label className="ck"><input type="checkbox" checked={lag} onChange={(e) => { setLag(e.target.checked); setPage(1); }} /> 基线滞后</label>
-        <label className="ck"><input type="checkbox" checked={sunset} onChange={(e) => { setSunset(e.target.checked); setPage(1); }} /> 日落候选</label>
-        <label className="ck"><input type="checkbox" checked={measured} onChange={(e) => { setMeasured(e.target.checked); setPage(1); }} /> 已测活跃度</label>
-        <span className="total-inline">共 {filtered.length.toLocaleString()} 条</span>
-        <button className="btn ghost" disabled={!filtered.length} onClick={exportCsv}>导出 CSV</button>
+        <OSelect
+          value={p}
+          minWidth={124}
+          onChange={(v) => {
+            setP(v);
+            setPage(1);
+          }}
+          options={[
+            { id: "", label: "分级（全部）" },
+            { id: "P0", label: "P0" },
+            { id: "P1", label: "P1" },
+            { id: "P2", label: "P2" },
+          ]}
+        />
+        <OSelect
+          value={grade}
+          minWidth={136}
+          onChange={(v) => {
+            setGrade(v);
+            setPage(1);
+          }}
+          options={[
+            { id: "", label: "活跃度（全部）" },
+            { id: "A", label: "A" },
+            { id: "B", label: "B" },
+            { id: "C", label: "C" },
+            { id: "D", label: "D" },
+            { id: "N/A", label: "N/A" },
+          ]}
+        />
+        <OSelect
+          value={disposal}
+          minWidth={124}
+          onChange={(v) => {
+            setDisposal(v);
+            setPage(1);
+          }}
+          options={[
+            { id: "", label: "建议（全部）" },
+            { id: "upgrade", label: "升级" },
+            { id: "maintain", label: "维持" },
+            { id: "sunset", label: "日落" },
+          ]}
+        />
+        <label className="ck">
+          <input
+            type="checkbox"
+            checked={lag}
+            onChange={(e) => {
+              setLag(e.target.checked);
+              setPage(1);
+            }}
+          />{" "}
+          基线滞后
+        </label>
+        <label className="ck">
+          <input
+            type="checkbox"
+            checked={sunset}
+            onChange={(e) => {
+              setSunset(e.target.checked);
+              setPage(1);
+            }}
+          />{" "}
+          日落候选
+        </label>
+        <label className="ck">
+          <input
+            type="checkbox"
+            checked={measured}
+            onChange={(e) => {
+              setMeasured(e.target.checked);
+              setPage(1);
+            }}
+          />{" "}
+          已测活跃度
+        </label>
+        <span className="total-inline">
+          共 {filtered.length.toLocaleString()} 条
+        </span>
+        <button
+          className="btn ghost"
+          disabled={!filtered.length}
+          onClick={exportCsv}
+        >
+          导出 CSV
+        </button>
       </div>
 
       <div className="thead-outer" ref={headRef}>
@@ -218,52 +376,123 @@ export function PackageTable(props: {
             {slice.map((r) => (
               <tr key={r.name} onClick={() => props.onOpen(r.name)}>
                 <td className="pkg-cell stk-l">
-                  <strong className="pkg-name" title={r.name}>{r.name}</strong>
-                  <div className="pkg-summary" title={r.summary}>{r.summary}</div>
+                  <strong className="pkg-name" title={r.name}>
+                    {r.name}
+                  </strong>
+                  <div className="pkg-summary" title={r.summary}>
+                    {r.summary}
+                  </div>
                   <RepoTag row={r} />
                 </td>
-                <td className="center"><span className={`badge b-${r.p_level}`}>{r.p_level}</span></td>
-                <td className="center"><span className={`badge b-${r.grade}`}>{r.grade}</span></td>
                 <td className="center">
-                  <span className={`prio ${prioCls(r.score)}`} title="治理优先级 = P级基础分(P0=4/P1=2.5/P2=1) + 落后基线分级(patch+0.5/minor+1.5/major+2.5，update/EPOL 回灌减免减半) + 活跃度D+1.5/C+0.75 + 日落候选+0.5，满分 10">
+                  <span className={`badge b-${r.p_level}`}>{r.p_level}</span>
+                </td>
+                <td className="center">
+                  <span className={`badge b-${r.grade}`}>{r.grade}</span>
+                </td>
+                <td className="center">
+                  <span
+                    className={`prio ${prioCls(r.score)}`}
+                    title="治理优先级 = P级基础分(P0=4/P1=2.5/P2=1) + 落后基线分级(patch+0.5/minor+1.5/major+2.5，update/EPOL 回灌减免减半) + 活跃度D+1.5/C+0.75 + 日落候选+0.5，满分 10"
+                  >
                     {r.score.toFixed(1)}
                   </span>
                 </td>
-                <td className="mono ver" title={r.versions.openEuler_LTS || ""}>{ver(r.versions.openEuler_LTS)}</td>
-                <td className="mono ver" title={r.versions.openEuler_innovation || ""}>{ver(r.versions.openEuler_innovation)}</td>
-                <td className="mono ver" title={r.versions.ubuntu_LTS || ""}>{ver(r.versions.ubuntu_LTS)}</td>
-                <td className="mono ver" title={r.versions.ubuntu_interim || ""}>{ver(r.versions.ubuntu_interim)}</td>
-                <td className="center stk-r stk-r3">{r.lagging ? <span className="flag lag">滞后</span> : <span className="flag good">同步</span>}</td>
+                <td className="mono ver" title={r.versions.openEuler_LTS || ""}>
+                  {ver(r.versions.openEuler_LTS)}
+                </td>
+                <td
+                  className="mono ver"
+                  title={r.versions.openEuler_innovation || ""}
+                >
+                  {ver(r.versions.openEuler_innovation)}
+                </td>
+                <td className="mono ver" title={r.versions.ubuntu_LTS || ""}>
+                  {ver(r.versions.ubuntu_LTS)}
+                </td>
+                <td
+                  className="mono ver"
+                  title={r.versions.ubuntu_interim || ""}
+                >
+                  {ver(r.versions.ubuntu_interim)}
+                </td>
+                <td className="center stk-r stk-r3">
+                  {r.lagging ? (
+                    <span className="flag lag">滞后</span>
+                  ) : (
+                    <span className="flag good">同步</span>
+                  )}
+                </td>
                 <td className="center stk-r stk-r2">{dispBadge(r.disposal)}</td>
-                <td className="mono stk-r">{(r.last_commit || "—").slice(0, 10)}</td>
+                <td className="mono stk-r">
+                  {(r.last_commit || "—").slice(0, 10)}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {slice.length === 0 ? <div className="empty">没有符合条件的包</div> : null}
+        {slice.length === 0 ? (
+          <div className="empty">没有符合条件的包</div>
+        ) : null}
       </div>
 
       <div className="table-foot">
         <span className="total">共 {filtered.length.toLocaleString()} 条</span>
         <div className="pager">
           <span className="size-select">
-            <OSelect value={String(per)} minWidth={76} onChange={(v) => { setPer(+v); goPage(1); }}
-              options={["25", "50", "100", "200"].map((n) => ({ id: n, label: n }))} />
+            <OSelect
+              value={String(per)}
+              minWidth={76}
+              onChange={(v) => {
+                setPer(+v);
+                goPage(1);
+              }}
+              options={["25", "50", "100", "200"].map((n) => ({
+                id: n,
+                label: n,
+              }))}
+            />
             条/页
           </span>
-          <button className="page pg-nav" disabled={cur <= 1} onClick={() => goPage(cur - 1)}>‹ 上一页</button>
+          <button
+            className="page pg-nav"
+            disabled={cur <= 1}
+            onClick={() => goPage(cur - 1)}
+          >
+            ‹ 上一页
+          </button>
           <div className="pages">
             {pageCluster(cur, pages).map((n, i) =>
-              n === "…"
-                ? <span key={i} style={{ padding: "0 2px", color: "#94a3b8" }}>…</span>
-                : <button key={i} className={`page ${n === cur ? "active" : ""}`} onClick={() => goPage(n)}>{n}</button>
+              n === "…" ? (
+                <span key={i} style={{ padding: "0 2px", color: "#94a3b8" }}>
+                  …
+                </span>
+              ) : (
+                <button
+                  key={i}
+                  className={`page ${n === cur ? "active" : ""}`}
+                  onClick={() => goPage(n)}
+                >
+                  {n}
+                </button>
+              ),
             )}
           </div>
-          <button className="page pg-nav" disabled={cur >= pages} onClick={() => goPage(cur + 1)}>下一页 ›</button>
+          <button
+            className="page pg-nav"
+            disabled={cur >= pages}
+            onClick={() => goPage(cur + 1)}
+          >
+            下一页 ›
+          </button>
         </div>
       </div>
 
-      {props.loading ? <div className="table-loading"><div className="spin" /></div> : null}
+      {props.loading ? (
+        <div className="table-loading">
+          <div className="spin" />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -284,7 +513,9 @@ function RepoTag(props: { row: PackageRow }) {
   return (
     <span className="pkg-tags">
       {tags.map((t) => (
-        <span key={t} className="tag">{t}</span>
+        <span key={t} className="tag">
+          {t}
+        </span>
       ))}
     </span>
   );
