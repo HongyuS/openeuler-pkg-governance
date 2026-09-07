@@ -16,7 +16,7 @@ from app.engine.rules_loader import rules
 from app.models import Comparison, VersionRow
 from app.utils import compare_upstream
 
-_DEGREE_ORDER = ("patch", "minor", "major")
+_DEGREE_BY_SEGMENT = ("major", "minor", "patch")  # leading segment first
 
 
 def _version_degree(oe_version: str, ext_version: str) -> str:
@@ -38,7 +38,7 @@ def _version_degree(oe_version: str, ext_version: str) -> str:
         sa = a[i] if i < len(a) else 0
         sb = b[i] if i < len(b) else 0
         if sa != sb:
-            return _DEGREE_ORDER[min(i, len(_DEGREE_ORDER) - 1)]
+            return _DEGREE_BY_SEGMENT[min(i, len(_DEGREE_BY_SEGMENT) - 1)]
     return "patch"
 
 
@@ -59,8 +59,14 @@ def build_comparison(
     baselines: dict[str, dict],
     *,
     special_latest: str = "",
+    fallback: VersionRow | None = None,
 ) -> Comparison:
-    """Assemble the baseline version rows for one package."""
+    """Assemble the baseline version rows for one package.
+
+    ``fallback`` (e.g. the PyPI/npm registry latest) is only used when no
+    Ubuntu baseline carries the package — per the baseline policy: Ubuntu
+    counterpart wins, registry latest is the last resort.
+    """
     comp = Comparison()
     rows: list[VersionRow] = []
 
@@ -86,6 +92,9 @@ def build_comparison(
         if rec:
             v = rec.get("versions", {}).get(name, "")
             rows.append(_row("suse", stream, v, source="opensuse"))
+
+    if fallback and fallback.version and not any(r.version for r in rows if r.distro == "ubuntu"):
+        rows.append(fallback)
 
     if special_latest:
         rows.append(_row("upstream", "special", special_latest, source="network"))
@@ -118,11 +127,16 @@ def _compute_lag(comp: Comparison) -> Comparison:
         if oe_best and compare_upstream(newest_ext.version, oe_best.version) > 0:
             comp.lagging = True
             comp.latest_upstream = newest_ext.version
-            comp.latest_upstream_source = f"{newest_ext.distro} {newest_ext.stream}"
+            # Registry rows (pypi/npm) carry a display-friendly stream label already.
+            src = (
+                newest_ext.stream
+                if newest_ext.distro in ("pypi", "npm")
+                else f"{newest_ext.distro} {newest_ext.stream}"
+            )
+            comp.latest_upstream_source = src
             comp.lag_degree = _version_degree(oe_best.version, newest_ext.version)
             comp.lag_notes.append(
-                f"{newest_ext.distro} {newest_ext.stream} carries {newest_ext.version} vs openEuler {oe_best.version}"
-                f" ({comp.lag_degree} lag)."
+                f"{src} carries {newest_ext.version} vs openEuler {oe_best.version} ({comp.lag_degree} lag)."
             )
 
     ubuntu_lts = next((r for r in present if r.stream == "ubuntu_LTS" and r.version), None)

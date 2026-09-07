@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import config
 from app.engine import compare
+from app.models import VersionRow
 from app.utils import LOG, setup_logging
 
 setup_logging()
@@ -94,6 +95,21 @@ def _sv_rec(stream: str, name: str | None) -> dict:
     return rec or {}
 
 
+def _registry_fallback(p: dict) -> Any:
+    """PyPI/npm registry latest as a fallback baseline row (None if inapplicable).
+
+    Used only when the package has no Ubuntu counterpart: pip/npm modules whose
+    latest version lives on the registry, not in any distro archive.
+    """
+    py = p.get("python") or {}
+    if py.get("kind") == "pip_module" and py.get("pypi_latest"):
+        return VersionRow(distro="pypi", stream="PyPI", version=str(py["pypi_latest"]), source="pypi")
+    npm = p.get("npm") or {}
+    if npm.get("kind") == "npm_module" and npm.get("npm_latest"):
+        return VersionRow(distro="npm", stream="npm", version=str(npm["npm_latest"]), source="npm")
+    return None
+
+
 def _apply_stream(p: dict, lts: str, innov: str) -> dict[str, Any]:
     """Recompute the openEuler version columns, lag and repo tags.
 
@@ -107,7 +123,7 @@ def _apply_stream(p: dict, lts: str, innov: str) -> dict[str, Any]:
         "openEuler_LTS": lts_rec.get("version", ""),
         "openEuler_innovation": innov_rec.get("version", ""),
     }
-    comp = compare.build_comparison(name, oe, _ubuntu_baselines())
+    comp = compare.build_comparison(name, oe, _ubuntu_baselines(), fallback=_registry_fallback(p))
     sv_rec = lts_rec or innov_rec
     return {
         "versions": {r.stream: r.version for r in comp.baselines},
@@ -116,6 +132,9 @@ def _apply_stream(p: dict, lts: str, innov: str) -> dict[str, Any]:
         "lag_behind_ubuntu_lts": comp.lag_behind_ubuntu_lts,
         "lag_behind_ubuntu_interim": comp.lag_behind_ubuntu_interim,
         "latest_upstream": comp.latest_upstream,
+        "latest_upstream_source": comp.latest_upstream_source,
+        "lag_degree": comp.lag_degree,
+        "lag_notes": comp.lag_notes,
         **{
             k: sv_rec.get(k, p.get(k, default))
             for k, default in (
@@ -396,6 +415,9 @@ def get_package(name: str, lts: str = Query(""), innov: str = Query("")) -> dict
             comp["lag_behind_ubuntu_lts"] = row["lag_behind_ubuntu_lts"]
             comp["lag_behind_ubuntu_interim"] = row["lag_behind_ubuntu_interim"]
             comp["latest_upstream"] = row["latest_upstream"]
+            comp["latest_upstream_source"] = row["latest_upstream_source"]
+            comp["lag_degree"] = row["lag_degree"]
+            comp["lag_notes"] = row["lag_notes"]
             out["comparison"] = comp
             return out
     raise HTTPException(status_code=404, detail=f"package {name} not found")
