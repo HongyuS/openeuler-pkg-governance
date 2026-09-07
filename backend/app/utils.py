@@ -84,6 +84,12 @@ def compare_versions_str(a: str, b: str) -> int:
 
 
 _REPACK_SUFFIX_RE = re.compile(r"[+~](?:dfsg|dsfg|ds|repack)\d*$", re.IGNORECASE)
+# VCS/date snapshot markers (``+svn142``, ``+git20240101.abc``, ``+20110614.git2a0fb15``):
+# a snapshot package of the *same* upstream release, not a newer upstream.
+_SNAPSHOT_SUFFIX_RE = re.compile(
+    r"\+(?:svn|hg|cvs)\d+$|\+git[0-9a-z.]+$|\+\d{8}(?:\.[0-9a-z.]+)?$",
+    re.IGNORECASE,
+)
 
 
 def upstream_version(version: str) -> str:
@@ -92,7 +98,9 @@ def upstream_version(version: str) -> str:
     Dropping the distro release suffix so cross-distribution comparisons are
     meaningful. Debian/Ubuntu source-repack markers (``+dfsg1``, ``~ds``,
     ``+repack0``) do not change the upstream version and are stripped too;
-    ``X+reallyY`` means the real upstream is ``Y``.
+    ``X+reallyY`` means the real upstream is ``Y``; VCS/date snapshot markers
+    (``+svn142``, ``+git<hash>``) package the same upstream release and are
+    stripped as well.
     """
     if not version:
         return ""
@@ -109,6 +117,7 @@ def upstream_version(version: str) -> str:
     while prev != upstream:
         prev = upstream
         upstream = _REPACK_SUFFIX_RE.sub("", upstream)
+        upstream = _SNAPSHOT_SUFFIX_RE.sub("", upstream)
     return f"{epoch}:{upstream}"
 
 
