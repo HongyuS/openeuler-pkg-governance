@@ -81,7 +81,15 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
             ) : "—"}
           </div>
         </div>
-        <div className="cell"><div className="k">反向依赖</div><div className="v">{g.reverse_deps}</div></div>
+        <div className="cell">
+          <div className="k">反向依赖</div>
+          <div className="v">
+            {g.reverse_deps}
+            {g.build_reverse_deps ? (
+              <span className="muted" style={{ fontSize: 12 }}> · 构建 {g.build_reverse_deps}</span>
+            ) : null}
+          </div>
+        </div>
         <div className="cell"><div className="k">活跃度指数</div><div className="v">{idx != null ? idx : "—"}</div></div>
         <div className="cell"><div className="k">开放待办 (Issue+PR)</div><div className="v">{d.activity.open_issues + d.activity.open_prs}</div></div>
       </div>
@@ -155,7 +163,25 @@ export function DetailDrawer(props: { detail: PackageDetail | null; loading: boo
       <div className="box">
         <h4>关键依赖包（反向依赖 Top）</h4>
         <div className="muted">{g.dependents.slice(0, 14).join(", ") || "无"}</div>
+        {g.build_dependents?.length ? (
+          <>
+            <h4 style={{ marginTop: 10 }}>构建依赖方（BuildRequires）· {g.build_reverse_deps}</h4>
+            <div className="muted">
+              {g.build_dependents.slice(0, 14).join(", ")}
+              {g.build_reverse_deps > g.build_dependents.length ? " …" : ""}
+            </div>
+          </>
+        ) : null}
       </div>
+      {d.build_requires?.length ? (
+        <div className="box">
+          <h4>构建依赖（BuildRequires）· {d.build_requires.length}</h4>
+          <div className="muted">
+            {d.build_requires.slice(0, 24).join(", ")}
+            {d.build_requires.length > 24 ? " …" : ""}
+          </div>
+        </div>
+      ) : null}
       <div ref={trendRef} id="trend" />
       <p className="muted" style={{ fontSize: 11 }}>
         活跃度来源：{d.activity.source === "measured" ? "GitCode 实测" : "待采集"} · 最后提交 {d.activity.last_commit || "—"}

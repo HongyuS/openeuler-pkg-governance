@@ -27,6 +27,7 @@ export interface PackageRow {
   special: boolean;
   sig: string;
   reverse_deps: number;
+  build_reverse_deps: number;
   score: number;
   effort_pd: number;
   effort_py: number;
@@ -116,6 +117,8 @@ export interface PackageDetail {
     sunset_candidate: boolean;
     reverse_deps: number;
     dependents: string[];
+    build_reverse_deps: number;
+    build_dependents: string[];
     effort_person_days: number;
     effort_person_years: number;
     maintenance_notes: string[];
@@ -132,6 +135,7 @@ export interface PackageDetail {
   special_note: string;
   has_source: boolean;
   has_debug: boolean;
+  build_requires: string[];
   in_epol: boolean;
   in_update: boolean;
   latest_repo: string;

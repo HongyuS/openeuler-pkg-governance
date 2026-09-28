@@ -67,15 +67,34 @@ def apply_nodejs(pkg: Package, system_set: set[str], npm_profiles: dict[str, dic
 
     sys_deps = [d for d in gov.dependents if d in system_set]
     other_deps = [d for d in gov.dependents if d not in system_set]
+    # Build-only dependents (BuildRequires) still need the module in the
+    # buildroot, which a bundled npm tree inside the consuming package cannot
+    # provide at RPM build time.
+    build_deps = list(gov.build_dependents)
     if sys_deps:
         gov.maintenance_notes.append(f"npm 模块被关键包 [{_fmt(sys_deps)}] 强制依赖：保留在系统源维护。")
         if prof.get("npm_stale") or prof.get("npm_deprecated"):
             gov.maintenance_notes.append("npm 模块：上游停更/已废弃，但仍被关键包依赖，需维持并评估替代。")
+        if build_deps:
+            gov.maintenance_notes.append(
+                f"另有 {len(build_deps)} 个包的构建过程依赖它（BuildRequires，如 {_fmt(build_deps)}）："
+                "构建根可用性同样要求保留。"
+            )
     elif other_deps:
         gov.maintenance_notes.append(
             f"npm 模块仅被非关键包 [{_fmt(other_deps)}] 依赖：属开发工具，"
             "通告并敦促依赖方维护者转向 bundle 方式（npm bundle、pkg、Electron 自带运行时等），"
             "过渡期后退出系统源。"
+        )
+        if build_deps:
+            gov.maintenance_notes.append(
+                f"同时被 {len(build_deps)} 个包的构建过程依赖（BuildRequires，如 {_fmt(build_deps)}）："
+                "退出系统源前必须先解除这些构建依赖。"
+            )
+    elif build_deps:
+        gov.maintenance_notes.append(
+            f"npm 模块仅作为构建依赖存在：{len(build_deps)} 个包的 BuildRequires 依赖它"
+            f"（如 {_fmt(build_deps)}）：保留在系统源，保证构建根可用。"
         )
     else:
         gov.disposal = "sunset"

@@ -122,6 +122,10 @@ def apply_python(
     system_set = system_set or set()
     sys_deps = [d for d in gov.dependents if d in system_set]
     other_deps = [d for d in gov.dependents if d not in system_set]
+    # Build-only dependents: specs whose BuildRequires pull this module into the
+    # buildroot. They cannot be satisfied by a user-side venv, so a module that
+    # is only needed to *build* other RPMs still has to stay in the system repo.
+    build_deps = list(gov.build_dependents)
 
     def _fmt(names: list[str]) -> str:
         shown = ", ".join(names[:5])
@@ -131,6 +135,11 @@ def apply_python(
         gov.maintenance_notes.append(f"被系统/关键包 [{_fmt(sys_deps)}] 依赖：保留在系统源并优先对齐上游。")
         if prof.get("pypi_stale"):
             gov.maintenance_notes.append("Python/pip 模块：PyPI 上游停更，但仍被系统包依赖，需维持并评估替代。")
+        if build_deps:
+            gov.maintenance_notes.append(
+                f"另有 {len(build_deps)} 个包的构建过程依赖它（BuildRequires，如 {_fmt(build_deps)}）："
+                "构建根可用性同样要求保留。"
+            )
     elif other_deps:
         gov.maintenance_notes.append(
             f"仅被非关键包 [{_fmt(other_deps)}] 依赖：通告并敦促依赖方维护者转向 "
@@ -139,6 +148,18 @@ def apply_python(
         )
         if prof.get("pypi_stale"):
             gov.maintenance_notes.append("Python/pip 模块：PyPI 上游停更，但仍被依赖，需维持并评估替代。")
+        if build_deps:
+            gov.maintenance_notes.append(
+                f"同时被 {len(build_deps)} 个包的构建过程依赖（BuildRequires，如 {_fmt(build_deps)}）："
+                "退出系统源前必须先解除这些构建依赖。"
+            )
+    elif build_deps:
+        gov.maintenance_notes.append(
+            f"仅作为构建依赖存在：{len(build_deps)} 个包的 BuildRequires 依赖它"
+            f"（如 {_fmt(build_deps)}）：保留在系统源，保证构建根可用。"
+        )
+        if prof.get("pypi_stale"):
+            gov.maintenance_notes.append("Python/pip 模块：PyPI 上游停更，但仍是其他包的构建依赖，需维持并评估替代。")
     else:
         gov.disposal = "sunset"
         gov.sunset_candidate = True

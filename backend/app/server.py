@@ -351,6 +351,7 @@ def digest(lts: str = Query(""), innov: str = Query("")) -> dict:
                 "special": p.get("special"),
                 "sig": p.get("sig", ""),
                 "reverse_deps": p.get("governance", {}).get("reverse_deps"),
+                "build_reverse_deps": p.get("governance", {}).get("build_reverse_deps", 0),
                 "score": p.get("governance", {}).get("score"),
                 "effort_pd": p.get("governance", {}).get("effort_person_days"),
                 "effort_py": p.get("governance", {}).get("effort_person_years"),

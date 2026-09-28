@@ -72,6 +72,23 @@ v1 的三个问题经社区对标（Fedora / Debian / Ubuntu / SUSE）确认后�
 
 **Why**：全仓无消费方；日期维度的滞后判定已由版本段分级（D4）替代，保留死配置会误导后续维护者。
 
+## D10 依赖图拆成运行时 + 构建两套
+
+**决策**：除二进制仓 `Requires` 的运行时反依赖外，再从 source / update-source 仓 `arch="src"` 包的
+`rpm:requires`（SRPM 头的 spec 级 requires = 各子包 `Requires` ∪ `BuildRequires`）减去同一源包的运行时
+capability，得到纯构建依赖边。P 分级的 p75 兜底改用 `max(运行时, 构建)`，P0 `core` 判定仍只看运行时
+（构建扇入说明"很多人需要编译它"，不等于"装好的系统依赖它"）；日落保护取两者并集
+（`disposal` 的 `sunset_eligible` 要求两个计数都为 0）。
+
+**Why**：只看运行时依赖会系统性误杀构建工具链——实测 24.03-LTS-SP4 有 619 个"D 级 + 无运行时反依赖"
+的包其实被别的 spec `BuildRequires`（`python-hatch-vcs` 63、`nodejs-tape` 55、`help2man` 40…），
+`make` 的运行时反依赖只有 17 而构建反依赖 798。构建依赖被删会直接让构建根不可用，必须参与保护。
+
+**落地文件**：`collectors/repodata_parser.py`（`parse_source_primary`）、`collectors/openeuler.py`
+（source 仓 full 解析 + capability 相减）、`engine/importance.py`（`build_build_graph` +
+`build_reverse_deps`/`build_dependents`）、`engine/disposal.py`、`engine/python_gov.py`、
+`engine/nodejs_gov.py`、`models.py`、`utils.py::cap_key`。
+
 ## 公式汇总
 
 ```text

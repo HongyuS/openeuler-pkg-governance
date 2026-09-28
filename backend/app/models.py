@@ -75,6 +75,10 @@ class Governance:
     sunset_candidate: bool = False
     reverse_deps: int = 0
     dependents: list[str] = field(default_factory=list)
+    # Build-time pressure: how many source packages' BuildRequires resolve here.
+    # Kept separate from the runtime graph above; sunset protection is the union.
+    build_reverse_deps: int = 0
+    build_dependents: list[str] = field(default_factory=list)
     effort_person_days: float = 0.0
     effort_person_years: float = 0.0
     maintenance_notes: list[str] = field(default_factory=list)
@@ -97,6 +101,7 @@ class Package:
     # Availability across the default openEuler repositories.
     has_source: bool = False  # present in source / update-source
     has_debug: bool = False  # present in debuginfo
+    build_requires: list[str] = field(default_factory=list)  # spec-level BuildRequires (runtime removed)
     in_epol: bool = False  # present in EPOL (extra packages)
     in_update: bool = False  # present in update (newest patch repo)
     latest_repo: str = ""  # repo holding the newest version

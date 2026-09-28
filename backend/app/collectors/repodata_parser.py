@@ -9,6 +9,10 @@ requires sets. From it we derive:
 * the set of source packages and their build versions per release stream,
 * the software-provides graph used for reverse-dependency (“how many packages
   rely on me”) importance scoring.
+
+A *source* repository is the same format with ``arch="src"`` packages; their
+``rpm:requires`` is the spec-level requires (subpackage ``Requires`` plus
+``BuildRequires``), which ``parse_source_primary`` turns into the build-edge set.
 """
 
 from __future__ import annotations
@@ -180,6 +184,55 @@ def source_name_from_rpm(src_rpm: str) -> str:
     return base.rsplit("-", 1)[0]
 
 
+def parse_source_primary(xml_bytes: bytes) -> dict[str, dict]:
+    """Return ``{source package: {version, arches, summary, license, build_requires}}``.
+
+    Source repositories carry ``arch="src"`` packages whose ``rpm:requires`` is
+    the SRPM header's spec-level requires: the union of every subpackage's
+    ``Requires`` **plus the spec's ``BuildRequires``**. The binary-repo runtime
+    capabilities are subtracted by the caller, so what survives is the
+    build-only edge set — the part the runtime dependency graph cannot see.
+    """
+    out: dict[str, dict] = {}
+    for pkg in iter_packages(xml_bytes):
+        if _text(pkg, "arch") != "src":
+            continue
+        name = _text(pkg, "name")
+        if not name:
+            continue
+        version = _version(_find(pkg, "version"))
+        summary = _text(pkg, "summary")
+        frmt = _find(pkg, "format")
+        license_ = _text(frmt, "license")
+        requires: list[str] = []
+        if frmt is not None:
+            for req_container in frmt.findall(f"{{{RPM_NS}}}requires"):
+                for entry in req_container:
+                    rn = (entry.get("name") or "").strip()
+                    if rn:
+                        requires.append(rn)
+        entry = out.setdefault(
+            name,
+            {
+                "version": version,
+                "arches": ["src"],
+                "summary": summary,
+                "license": license_,
+                "build_requires": [],
+            },
+        )
+        if version and version_compare(version, entry["version"]) > 0:
+            entry["version"] = version
+        if not entry["summary"] and summary:
+            entry["summary"] = summary
+        if not entry["license"] and license_:
+            entry["license"] = license_
+        entry["build_requires"].extend(requires)
+    for entry in out.values():
+        entry["build_requires"] = list(dict.fromkeys(entry["build_requires"]))
+    return out
+
+
 def build_source_records(records: list[dict]) -> dict[str, dict]:
     """Aggregate binary records into source-package records.
 
@@ -255,10 +308,14 @@ def collect_release(
     cache_dir: Path,
     *,
     light: bool = False,
+    source: bool = False,
 ) -> dict[str, dict]:
     """Fetch and parse a whole release from its repomd URL.
 
     `repomd_url` points at ``.../{release}/{target}/{arch}/repodata/repomd.xml``.
+    ``light`` keeps only version/summary (debuginfo, quick sweep); ``source``
+    parses a source repository, keeping each SRPM's spec-level requires as
+    ``build_requires``. The two flags are mutually exclusive.
     """
     import hashlib
 
@@ -303,6 +360,10 @@ def collect_release(
                 entry["summary"] = rec["summary"]
         LOG.info("release %s -> %d source packages (light)", repo_base, len(result))
         return result
+    if source:
+        src_reqs = parse_source_primary(data)
+        LOG.info("release %s -> %d source packages (build-requires)", repo_base, len(src_reqs))
+        return src_reqs
     records = parse_primary(data)
     src = build_source_records(records)
     LOG.info("release %s -> %d source packages", repo_base, len(src))

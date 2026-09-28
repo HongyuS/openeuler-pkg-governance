@@ -7,35 +7,28 @@ Mirrors the plan:
 * **P1** — secondary base packages: network / storage / toolchain.
 * **P2** — upper-layer applications: desktop & terminal software, updated last.
 
-The reverse-dependency count is a strong importance signal but must not swallow
-the histogram (base libraries are required by everything). We therefore combine
-curated rules with *percentile* bands of reverse-dependency pressure.
+Two dependency graphs feed the classification, kept deliberately separate:
+
+* **runtime** — binary ``Requires`` (shared libraries, ``python3dist(…)``, …);
+* **build-only** — spec-level ``BuildRequires`` from the source repositories,
+  with the runtime capabilities already subtracted by the collector.
+
+A package can be pulled out of obscurity by either graph (``make`` has 17 runtime
+dependents but ~800 build dependents), so the P1 percentile band uses the larger
+of the two. The P0 ``core`` promotion stays runtime-only: build fan-in says
+"many specs need this to compile", not "the installed system depends on it".
 """
 
 from __future__ import annotations
 
-import re
 from collections import deque
 
 from app.engine.rules_loader import rules
+from app.utils import cap_key
 
-_SONAME_RE = re.compile(r"^(?P<soname>.+?\.so[^()]*)(?:\([^()]*\))?(?P<arch>\(\d+bit\))?$")
-
-
-def _cap_key(cap: str) -> str:
-    """Normalise an rpm capability for graph matching.
-
-    Namespaced capabilities (``python3dist(x)``, ``npm(x)``, ``perl(x)``) are
-    kept intact: splitting at "(" would collapse a whole language ecosystem
-    into one fake super-node. SONAMEs drop the version tag but keep the arch
-    marker so ``libcrypto.so.3(OPENSSL_3.0.0)(64bit)`` satisfies
-    ``libcrypto.so.3()(64bit)``.
-    """
-    if ".so" in cap:
-        m = _SONAME_RE.match(cap)
-        if m:
-            return f"{m.group('soname')}(){m.group('arch') or ''}"
-    return cap
+# Kept as a module-level alias: the historical private name is referenced by the
+# repo's AGENTS.md and by out-of-tree scripts.
+_cap_key = cap_key
 
 
 def build_provide_map(inventory: dict[str, dict]) -> dict[str, set[str]]:
@@ -48,10 +41,27 @@ def build_provide_map(inventory: dict[str, dict]) -> dict[str, set[str]]:
 
 
 def build_require_graph(inventory: dict[str, dict], provide_map: dict[str, set[str]]) -> dict[str, set[str]]:
-    """Build the package -> {dependent sources} reverse graph."""
+    """Build the package -> {runtime dependent sources} reverse graph."""
     reverse: dict[str, set[str]] = {}
     for name, rec in inventory.items():
         for req in rec.get("requires", []):
+            for src in provide_map.get(_cap_key(req), ()):
+                if src != name:
+                    reverse.setdefault(src, set()).add(name)
+    return reverse
+
+
+def build_build_graph(inventory: dict[str, dict], provide_map: dict[str, set[str]]) -> dict[str, set[str]]:
+    """Build the package -> {sources that BuildRequire it} reverse graph.
+
+    ``build_requires`` holds the spec-level ``BuildRequires`` capabilities that
+    remain *after* the collector subtracted the source package's runtime
+    capabilities, so this graph is disjoint from the runtime one and the two can
+    simply be unioned for protection decisions (e.g. sunset).
+    """
+    reverse: dict[str, set[str]] = {}
+    for name, rec in inventory.items():
+        for req in rec.get("build_requires", []):
             for src in provide_map.get(_cap_key(req), ()):
                 if src != name:
                     reverse.setdefault(src, set()).add(name)
@@ -121,10 +131,15 @@ def classify(
     py_seeds = set(cfg.get("python_closure_seeds", []))
     provide_map = build_provide_map(inventory)
     reverse = build_require_graph(inventory, provide_map)
+    build_reverse = build_build_graph(inventory, provide_map)
     closure = closure if closure is not None else python_closure(inventory, provide_map)
 
     rd = {name: len(reverse.get(name, ())) for name in inventory}
-    pct = _percentiles(list(rd.values()))
+    brd = {name: len(build_reverse.get(name, ())) for name in inventory}
+    # Percentile bands follow the *stronger* of the two graphs: a build-only
+    # dependency is just as much of a reason to keep a package as a runtime one
+    # (a removed BuildRequires breaks the whole buildroot, not just one binary).
+    pct = _percentiles([max(rd[name], brd[name]) for name in inventory])
     p95, p75 = pct["p95"], pct["p75"]
     # "Key" packages: the curated critical set plus the explicit Python runtime
     # seeds. The *closure* is tracked separately (in_python_closure) but should
@@ -134,19 +149,21 @@ def classify(
     result: dict[str, dict] = {}
     for name in inventory:
         reverse_deps = rd.get(name, 0)
+        build_reverse_deps = brd.get(name, 0)
+        pressure = max(reverse_deps, build_reverse_deps)
         is_critical = name in p0 or name in py_runtime
         is_base = name in p1 or name in iso_base
 
         if is_critical:
             p_level = "P0"
-        elif is_base or reverse_deps >= p75:
+        elif is_base or pressure >= p75:
             p_level = "P1"
         else:
             p_level = "P2"
 
         if is_critical or (reverse_deps >= p95 and is_base):
             importance = "core"
-        elif is_base or reverse_deps >= p75:
+        elif is_base or pressure >= p75:
             importance = "important"
         else:
             importance = "ordinary"
@@ -158,6 +175,8 @@ def classify(
             "critical_term": name in ("kernel", "glibc", "openssl", "systemd"),
             "reverse_deps": reverse_deps,
             "dependents": sorted(reverse.get(name, ()))[:60],
+            "build_reverse_deps": build_reverse_deps,
+            "build_dependents": sorted(build_reverse.get(name, ()))[:60],
             "in_python_closure": name in closure,
             "bands": pct,
         }

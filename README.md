@@ -148,12 +148,13 @@ P1 基础包（手工清单 ∪ iso_baseline ∪ 反向依赖 p75 兜底）→ P
 ### 语言生态与日落治理
 
 - **Python/pip**：系统源仅保留为其他系统包提供运行时依赖的模块。被核心/关键包依赖的保留并对齐上游；
-  仅被非关键包依赖的标记迁移提示（venv / PyInstaller / shiv / pex / 容器镜像）；无依赖方的一律建议日落。
+  仅被非关键包依赖的标记迁移提示（venv / PyInstaller / shiv / pex / 容器镜像）；作为其他包
+  `BuildRequires` 构建依赖的保留在系统源（构建根无法用 venv 替代）；以上都不是才建议日落。
   PyPI 停更与 `Requires-Python` 屏障仅作风险备注（`engine/python_gov.py`）。
 - **Node.js/npm**：判定逻辑相同（`engine/nodejs_gov.py`）；nodejs/npm/pnpm/yarn 等工具链作为开发者
   生态入口保留维护，不参与日落。
-- **日落严格化**：仅当 D 级 + 无反向依赖 + 非关键才建议日落；ISO 基线包命中 `sunset_protection` 时
-  回退 maintain 并备注。
+- **日落严格化**：仅当 D 级 + 无反向依赖（运行时与构建依赖都为空）+ 非关键才建议日落；
+  ISO 基线包命中 `sunset_protection` 时回退 maintain 并备注。
 - **长期未更新**：超 180 天无提交且有未闭环 Issue/PR → 标记"长期未更新/疑似无人维护"。
 
 ### 数据口径
@@ -162,8 +163,11 @@ P1 基础包（手工清单 ∪ iso_baseline ∪ 反向依赖 p75 兜底）→ P
   version 取二进制源中最新并打 `has_source`/`has_debug`/`in_epol`/`in_update`/`in_os` 标记。
 - **版本比较**：剥 `.oe`/`.el`/`.fc`/`-0ubuntu` 发行后缀与 epoch 后只比上游版本；`source_aliases`
   处理改名包（kernel↔linux）；Ubuntu repack 后缀（`+dfsg`/`+ds`/`+really`）按语义剥离，避免误报落后。
-- **反向依赖**：从 `primary.xml` 的 provides/requires 建图，用百分位而非原始阈值；capability 归一化
-  保留命名空间（`python3dist(x)`/`npm(x)` 完整匹配），SONAME 剥版本保留架构后缀。
+- **反向依赖（两套图）**：运行时依赖取二进制仓 `primary.xml` 的 provides/requires；构建依赖取
+  source / update-source 仓 `arch="src"` 包的 `rpm:requires`（SRPM 头的 spec 级 requires =
+  各子包 Requires ∪ BuildRequires），再减去运行时 capability 得到纯构建边。P 分级的百分位用两者
+  较大值，P0 `core` 判定仍只看运行时；日落保护取两者并集。capability 归一化保留命名空间
+  （`python3dist(x)`/`npm(x)` 完整匹配），SONAME 剥版本保留架构后缀。
 - **DevStation**：每个 RC 按 kernel 变体展开为独立流，基线排最前；默认创新版取最新 RC 的基线变体。
   稳定镜像发布后自动切换为 `repo.openeuler.org`，无需改配置。
 

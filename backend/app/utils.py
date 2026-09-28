@@ -83,6 +83,25 @@ def compare_versions_str(a: str, b: str) -> int:
     return version_compare(a, b)
 
 
+_SONAME_RE = re.compile(r"^(?P<soname>.+?\.so[^()]*)(?:\([^()]*\))?(?P<arch>\(\d+bit\))?$")
+
+
+def cap_key(cap: str) -> str:
+    """Normalise an rpm capability (provides/requires name) for graph matching.
+
+    Namespaced capabilities (``python3dist(x)``, ``npm(x)``, ``perl(x)``) are
+    kept intact: splitting at "(" would collapse a whole language ecosystem
+    into one fake super-node. SONAMEs drop the version tag but keep the arch
+    marker so ``libcrypto.so.3(OPENSSL_3.0.0)(64bit)`` satisfies
+    ``libcrypto.so.3()(64bit)``.
+    """
+    if ".so" in cap:
+        m = _SONAME_RE.match(cap)
+        if m:
+            return f"{m.group('soname')}(){m.group('arch') or ''}"
+    return cap
+
+
 _REPACK_SUFFIX_RE = re.compile(r"[+~](?:dfsg|dsfg|ds|repack)\d*$", re.IGNORECASE)
 # VCS/date snapshot markers (``+svn142``, ``+git20240101.abc``, ``+20110614.git2a0fb15``):
 # a snapshot package of the *same* upstream release, not a newer upstream.

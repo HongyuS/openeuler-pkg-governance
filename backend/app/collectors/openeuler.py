@@ -20,7 +20,7 @@ import re
 
 from app import config
 from app.collectors import repodata_parser
-from app.utils import LOG, compare_upstream, http_get, version_compare
+from app.utils import LOG, cap_key, compare_upstream, http_get, version_compare
 
 LTS_RE = re.compile(r"^openEuler-(?P<ver>\d+\.\d+)-LTS(?:-SP(?P<sp>\d+))?$")
 INNOV_RE = re.compile(r"^openEuler-(?P<ver>\d+\.\d+)(?:-DevStation)?$")
@@ -287,8 +287,13 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
     availability comes from ``source``/``update/source``; debug info from
     ``debuginfo``. Returns ``{source: {version, repo, has_source, has_debug,
     in_os, in_epol, in_update, arches, summary, license, provides, requires,
-    reverse}}``. ``in_os`` marks presence in the OS repo, whose content matches
-    the Offline Standard (base installation) ISO.
+    build_requires, reverse}}``. ``in_os`` marks presence in the OS repo, whose
+    content matches the Offline Standard (base installation) ISO.
+
+    ``requires`` is the *runtime* capability set (binary repos only);
+    ``build_requires`` is the spec-level ``BuildRequires`` set recovered from
+    the source repos, with the runtime capabilities subtracted so the two graphs
+    stay disjoint (see ``repodata_parser.parse_source_primary``).
     """
     desc = resolve_stream(stream_id)
     if not desc:
@@ -302,10 +307,11 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
             LOG.info("repo %s not present for %s", spec["name"], stream_id)
             continue
         try:
-            # Binary repos carry the dependency graph (needed for importance);
-            # source/debug repos only need presence + version, so parse lightly.
-            parse_full = full and spec["kind"] == "binary"
-            src = repodata_parser.collect_release(url, src_cache, light=not parse_full)
+            # Binary repos carry the runtime dependency graph, source repos the
+            # spec-level BuildRequires; debuginfo only needs presence + version.
+            light = not full or spec["kind"] not in ("binary", "source")
+            as_source = full and spec["kind"] == "source"
+            src = repodata_parser.collect_release(url, src_cache, light=light, source=as_source)
         except Exception as exc:  # ruff: ignore[blind-except]
             LOG.warning("repo %s failed for %s: %s", spec["name"], stream_id, exc)
             continue
@@ -326,6 +332,7 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
                     "license": rec.get("license", ""),
                     "provides": [],
                     "requires": [],
+                    "build_requires": [],
                     "reverse": 0,
                 },
             )
@@ -360,7 +367,17 @@ def collect_stream_inventory(stream_id: str, *, full: bool = False) -> dict[str,
                 for rq in rec.get("requires", []):
                     if rq not in entry["requires"]:
                         entry["requires"].append(rq)
+                for bq in rec.get("build_requires", []):
+                    if bq not in entry["build_requires"]:
+                        entry["build_requires"].append(bq)
                 entry["reverse"] = max(entry["reverse"], rec.get("reverse", 0))
+
+    # The SRPM's requires is the union of every subpackage's runtime Requires and
+    # the spec's BuildRequires, so subtracting the capabilities we already know
+    # from the binary repos leaves exactly the build-only edges.
+    for entry in merged.values():
+        runtime = {cap_key(q) for q in entry["requires"]}
+        entry["build_requires"] = [q for q in entry["build_requires"] if cap_key(q) not in runtime]
     return merged
 
 
@@ -412,6 +429,7 @@ def collect(streams: dict[str, str] | None = None) -> dict[str, dict]:
                     "reverse": rec.get("reverse", 0),
                     "provides": rec.get("provides", []),
                     "requires": rec.get("requires", []),
+                    "build_requires": rec.get("build_requires", []),
                     "has_source": rec.get("has_source", False),
                     "has_debug": rec.get("has_debug", False),
                     "in_os": rec.get("in_os", False),

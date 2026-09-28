@@ -77,6 +77,8 @@ def build_packages(
                 "critical_term": False,
                 "reverse_deps": 0,
                 "dependents": [],
+                "build_reverse_deps": 0,
+                "build_dependents": [],
             },
         )
         signals = activity.get(name, RepoSignals(source="none"))
@@ -90,6 +92,8 @@ def build_packages(
             critical_term=cls["critical_term"],
             reverse_deps=cls["reverse_deps"],
             dependents=cls["dependents"],
+            build_reverse_deps=cls.get("build_reverse_deps", 0),
+            build_dependents=cls.get("build_dependents", []),
             activity_grade=letter,
             activity_scores=scores,
             activity_source=scores.get("source", "estimated"),
@@ -124,6 +128,7 @@ def build_packages(
             groups=rec.get("groups", []),
             has_source=rec.get("has_source", False),
             has_debug=rec.get("has_debug", False),
+            build_requires=rec.get("build_requires", []),
             in_epol=rec.get("in_epol", False),
             in_update=rec.get("in_update", False),
             latest_repo=rec.get("latest_repo", ""),
