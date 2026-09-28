@@ -44,9 +44,10 @@ export default function App() {
         innov={d.innov}
         onLts={d.setLts}
         onInnov={d.setInnov}
-        onRefresh={d.refresh}
+        onRefresh={d.refreshOnline}
         onDocs={() => setDocsOpen(true)}
         loading={d.loading}
+        refresh={d.refresh}
       />
       <div className="banner">
         <div className="banner-inner">

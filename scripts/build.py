@@ -1,19 +1,12 @@
 #!/usr/bin/env python3
-"""Build the full package-governance dataset from live public APIs.
+"""CLI entry point for the openEuler package-governance collection job.
 
-Collects:
-  1. the selectable **stream catalogue** (maintained LTS + released innovation +
-     every DevStation RC / daily build),
-  2. a per-stream *version* matrix (``stream_versions.json``),
-  3. the canonical (default-pair) openEuler inventory with dependency graph,
-  4. Ubuntu LTS + frontier baseline versions,
-  5. per-package activity/backlog from the public GitCode API (full scan by
-     default; the activity cache makes reruns incremental),
-
-then runs the governance engine and writes ``backend/data/cache/packages.json``.
+The heavy lifting lives in :mod:`app.build_job` so the web UI can trigger the
+exact same online refresh from the “刷新数据” button.
 
 Usage:
-    python scripts/build.py [--no-activity] [--activity-limit N]
+    python scripts/build.py            # full online build
+    python scripts/build.py --quick    # fast refresh (default pair + catalogue)
 """
 
 from __future__ import annotations
@@ -23,7 +16,6 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
@@ -31,217 +23,35 @@ sys.path.insert(0, str(BACKEND))
 os.environ.setdefault("PYTHONPATH", str(BACKEND))
 
 from app import config  # ruff: ignore[module-import-not-at-top-of-file]
-from app.collectors import (  # ruff: ignore[module-import-not-at-top-of-file]
-    gitcode,
-    npm,
-    oemaker,
-    openeuler,
-    pypi,
-    repos,
-    sig,
-    ubuntu,
-)
-from app.engine import pipeline  # ruff: ignore[module-import-not-at-top-of-file]
-from app.utils import LOG, setup_logging  # ruff: ignore[module-import-not-at-top-of-file]
+from app.build_job import run_build  # ruff: ignore[module-import-not-at-top-of-file]
+from app.utils import setup_logging  # ruff: ignore[module-import-not-at-top-of-file]
 
 setup_logging()
 
 
-def pick_activity_targets(inventory: dict[str, dict], limit: int) -> list[str]:
-    """Priority-ordered activity targets: P0/P1/special packages first.
-
-    Then everything else, so an interrupted run still covers the important repos.
-    """
-    rules = __import__("app").engine.rules_loader.rules()
-    p0 = {p for p in set(rules.get("P0_critical", [])) | set(rules.get("python_closure_seeds", [])) if p in inventory}
-    p1 = {p for p in rules.get("P1_base", []) if p in inventory}
-    special = {s["name"] for s in rules.get("special_packages", []) if s.get("name") in inventory}
-    selected: list[str] = []
-    for group in (sorted(p0), sorted(p1 - p0), sorted(special - p0 - p1)):
-        for name in group:
-            if name not in selected:
-                selected.append(name)
-    for name in sorted(inventory):
-        if name not in selected:
-            selected.append(name)
-    return selected[:limit] if limit else selected
-
-
-def collect_sig_map(disabled: bool) -> tuple[dict[str, list[str]], dict[str, dict]]:
-    """SIG ownership map + per-SIG metadata (empty when --no-sig or on failure)."""
-    if disabled:
-        return {}, {}
-    LOG.info("collecting SIG ownership map (community repo)…")
-    try:
-        data = sig.collect()
-        return data["pkg_sig"], data["sigs"]
-    except Exception as exc:  # ruff: ignore[blind-except]
-        LOG.warning("sig collection failed: %s", exc)
-        return {}, {}
-
-
 def main() -> None:
-    """Run the full collection + governance pipeline and write packages.json."""
+    """Parse CLI flags, run the collection job and print a summary."""
     ap = argparse.ArgumentParser()
-    ap.add_argument("--no-activity", action="store_true")
-    ap.add_argument("--no-pypi", action="store_true")
-    ap.add_argument("--no-npm", action="store_true")
-    ap.add_argument("--no-oemaker", action="store_true")
-    ap.add_argument("--no-sig", action="store_true")
+    ap.add_argument("--quick", action="store_true", help="refresh only the default pair + catalogue")
+    ap.add_argument("--scope", choices=["quick", "full"], default="")
     ap.add_argument("--activity-limit", type=int, default=config.ACTIVITY_SAMPLE_LIMIT)
     args = ap.parse_args()
 
-    catalog = openeuler.stream_catalog()
-    LOG.info("stream catalogue: %d selectable streams", len(catalog))
-    default = openeuler.discover_latest()
-    LOG.info("default pair: %s", default)
-
-    # 1) Per-stream version matrix (persisted after the ISO-tag merge below).
-    stream_versions: dict[str, dict[str, dict]] = {}
-    sv_cache = config.STREAM_VERSIONS_CACHE
-    if sv_cache.exists():
-        try:
-            stream_versions = json.loads(sv_cache.read_text(encoding="utf-8"))
-        except Exception:  # ruff: ignore[blind-except]
-            stream_versions = {}
-    for s in catalog:
-        sid = s["id"]
-        cached = stream_versions.get(sid)
-        # Entries must carry the in_os tag (added 2026-09); older caches are
-        # re-collected so per-stream ISO tags stay consistent.
-        if cached and all(isinstance(v, dict) and "in_os" in v for v in cached.values()):
-            continue
-        LOG.info("collecting stream versions for %s …", sid)
-        try:
-            stream_versions[sid] = openeuler.collect_stream_versions(sid)
-        except Exception as exc:  # ruff: ignore[blind-except]
-            LOG.warning("stream %s failed: %s", sid, exc)
-            stream_versions[sid] = {}
-
-    # 2) Canonical (default-pair) full inventory for the governance graph.
-    LOG.info("collecting canonical openEuler inventory (dependency graph)…")
-    inventory = openeuler.collect(default)
-    LOG.info("canonical inventory: %d source packages", len(inventory))
-    _write(config.CACHE_DIR / "inventory.json", {"streams": default, "packages": inventory})
-
-    # 2.5) Official ISO composition lists (oemaker, per release branch) for
-    # every selectable stream, merged into the stream-version matrix so the
-    # ISO tags follow the stream selected in the UI.
-    iso_tags: dict[str, dict] = {}
-    stream_tags: dict[str, dict] = {}
-    if not args.no_oemaker:
-        LOG.info("collecting official ISO package lists (oemaker)…")
-        try:
-            iso_data = oemaker.collect([s["id"] for s in catalog])
-            iso_tags = iso_data.get("tags", {})
-            stream_tags = iso_data.get("stream_tags", {})
-        except Exception as exc:  # ruff: ignore[blind-except]
-            LOG.warning("oemaker collection failed: %s", exc)
-    for sid, recs in stream_versions.items():
-        stags = stream_tags.get(sid, {})
-        for sname, rec in recs.items():
-            if not isinstance(rec, dict):
-                continue
-            flags = stags.get(sname, {})
-            rec["in_iso"] = bool(rec.get("in_os")) or bool(flags.get("devstation"))
-            if flags:
-                rec["iso_baseline"] = bool(flags.get("baseline"))
-                rec["iso_excluded"] = bool(flags.get("excluded"))
-                rec["iso_desktop"] = bool(flags.get("desktop"))
-                rec["iso_edge"] = bool(flags.get("edge"))
-    sv_cache.parent.mkdir(parents=True, exist_ok=True)
-    sv_cache.write_text(json.dumps(stream_versions, ensure_ascii=False))
-
-    # 2.6) SIG ownership map (community repo sig-info.yaml, per-SIG file cache).
-    sig_map, sigs_meta = collect_sig_map(args.no_sig)
-
-    # 3) Ubuntu baseline.
-    LOG.info("collecting Ubuntu baseline versions…")
-    ubuntu_data = ubuntu.collect()
-    ub_versions = ubuntu_data["versions"]
-    # Slim ubuntu maps to only packages present in the openEuler inventory.
-    slim = {
-        "ubuntu_LTS": {k: v for k, v in ub_versions.get("ubuntu_LTS", {}).items() if k in inventory},
-        "ubuntu_interim": {k: v for k, v in ub_versions.get("ubuntu_interim", {}).items() if k in inventory},
-    }
-
-    # 4) Activity (full scan by default; cache makes reruns incremental).
-    activity: dict = {}
-    if not args.no_activity:
-        targets = pick_activity_targets(inventory, args.activity_limit)
-        LOG.info("collecting activity for %d package repos via GitCode API…", len(targets))
-        resolver = repos.build_resolver(list(inventory.keys()))
-        activity = gitcode.collect_many(targets, cache=config.ACTIVITY_CACHE, resolve=resolver)
-        LOG.info("activity collected for %d packages", len(activity))
-
-    # 5) Governance pipeline.
-    LOG.info("running governance engine…")
-    rules = __import__("app").engine.rules_loader.rules()
-    special = {s["name"]: s["note"] for s in rules.get("special_packages", [])}
-    pypi_profiles: dict[str, dict] = {}
-    if not args.no_pypi:
-        pip_mods = [n for n in inventory if pypi.is_pip_module(n)]
-        LOG.info("fetching PyPI profiles for %d pip modules…", len(pip_mods))
-        pypi_profiles = pypi.collect(pip_mods, cache=config.CACHE_DIR / "pypi.json")
-    npm_profiles: dict[str, dict] = {}
-    if not args.no_npm:
-        npm_mods = [n for n in inventory if npm.is_npm_module(n)]
-        LOG.info("fetching npm profiles for %d npm modules…", len(npm_mods))
-        npm_profiles = npm.collect(npm_mods, cache=config.CACHE_DIR / "npm.json")
-    packages = pipeline.build_packages(
-        inventory,
-        ub_versions,
-        activity,
-        special=special,
-        pypi_profiles=pypi_profiles,
-        npm_profiles=npm_profiles,
-        iso_tags=iso_tags,
-        iso_protection=bool(rules.get("sunset_protection", {}).get("iso_baseline", False)),
-        sig_map=sig_map,
-    )
-
-    meta: dict[str, Any] = {
-        "streams": [
-            {
-                "id": s["id"],
-                "label": s["label"],
-                "kind": s["kind"],
-                "source": s["source"],
-                "date": s.get("date", ""),
-                "rc": s.get("rc", False),
-                "release": s.get("release", ""),
-            }
-            for s in catalog
-        ],
-        "default": default,
-        "baselines": ubuntu_data["meta"],
-        "ubuntu_lts": slim["ubuntu_LTS"],
-        "ubuntu_interim": slim["ubuntu_interim"],
-        "data_date": packages[0].data_date if packages else "",
-        "activity_measured": len([p for p in packages if p.activity.source == "measured"]),
-        "activity_sampled": len(activity),
-        "total_sources": len(packages),
-        "sigs": sigs_meta,
-    }
-    _write(config.PACKAGES_CACHE, {"meta": meta, "packages": [p.to_dict() for p in packages]})
-    LOG.info("WROTE %s", config.PACKAGES_CACHE)
+    scope = args.scope or ("quick" if args.quick else "full")
+    meta = run_build(scope, activity_limit=args.activity_limit)
     print(
         json.dumps(
             {
-                "streams": len(meta["streams"]),
-                "default": default,
-                "total": len(packages),
-                "activity_measured": meta["activity_measured"],
+                "scope": meta.get("scope"),
+                "streams": len(meta.get("streams", [])),
+                "default": meta.get("default"),
+                "total": meta.get("total_sources"),
+                "activity_measured": meta.get("activity_measured"),
             },
             ensure_ascii=False,
             indent=2,
         )
     )
-
-
-def _write(path: Path, data) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__":

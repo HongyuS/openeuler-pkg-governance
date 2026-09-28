@@ -171,6 +171,7 @@ def collect_many(
     limit: int = 0,
     cache: Path | None = None,
     resolve: Callable[[str], str | None] | None = None,
+    force: bool = False,
 ) -> dict[str, RepoSignals]:
     """Collect activity for many packages with bounded concurrency + cache.
 
@@ -180,7 +181,7 @@ def collect_many(
     """
     cache = cache or (config.CACHE_DIR / "activity.json")
     cached: dict[str, RepoSignals] = {}
-    if cache.exists():
+    if cache.exists() and not force:
         try:
             raw = json.loads(cache.read_text())
             for name, sig in raw.items():

@@ -108,11 +108,11 @@ def _iter_packages(codename: str) -> dict[str, dict]:
     return result
 
 
-def collect(baselines: tuple[str, str] | None = None) -> dict[str, dict]:
+def collect(baselines: tuple[str, str] | None = None, *, force: bool = False) -> dict[str, dict]:
     """Return {stream: {source_name: version}} and the {stream: codename} map."""
     import json
 
-    if config.UBUNTU_CACHE.exists() and baselines is None:
+    if config.UBUNTU_CACHE.exists() and baselines is None and not force:
         try:
             return json.loads(config.UBUNTU_CACHE.read_text(encoding="utf-8"))
         except Exception:  # ruff: ignore[blind-except]

@@ -30,6 +30,9 @@ from app.utils import LOG, http_get
 API_BASE = "https://api.gitcode.com/api/v5/repos/src-openeuler/oemaker"
 FILE_CACHE = config.CACHE_DIR / "oemaker"
 COMPS_ARCHES = ("x86_64", "aarch64")
+# Mutable holder instead of a module-level bool + ``global``: the fetch helper
+# reads it, ``collect`` flips it when the caller asks for a forced refresh.
+_FORCE = {"on": False}
 
 _STREAM_PREFIX = re.compile(r"^(openEuler-\d+\.\d+)")
 
@@ -67,7 +70,7 @@ def resolve_branch(stream_id: str, known: set[str] | None = None) -> str:
 def _fetch_file(branch: str, path: str) -> bytes:
     """Fetch one repo file via the GitCode contents API, cached on disk."""
     dest: Path = FILE_CACHE / branch / path
-    if dest.exists() and dest.stat().st_size > 0:
+    if dest.exists() and dest.stat().st_size > 0 and not _FORCE["on"]:
         return dest.read_bytes()
     try:
         resp = http_get(f"{API_BASE}/contents/{path}", params={"ref": branch}, timeout=30)
@@ -147,7 +150,7 @@ def binary_source_map(stream_id: str) -> dict[str, str]:
     return {b: sname for sname, rec in src.items() for b in rec.get("binaries", [])}
 
 
-def collect(streams: list[str] | dict[str, str]) -> dict:
+def collect(streams: list[str] | dict[str, str], *, force: bool = False) -> dict:
     """Collect ISO composition tags for every given stream id.
 
     ``streams`` is either a list of stream ids or a {stream_name: stream_id}
@@ -156,6 +159,7 @@ def collect(streams: list[str] | dict[str, str]) -> dict:
     {...union flags...}}}``. Binary names without a known source mapping fall
     back to their own name (most are source == binary).
     """
+    _FORCE["on"] = force
     ids = list(streams.values()) if isinstance(streams, dict) else list(streams)
     known = branches()
     tags: dict[str, dict] = {}

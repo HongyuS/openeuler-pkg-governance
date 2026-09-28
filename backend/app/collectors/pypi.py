@@ -96,11 +96,11 @@ def fetch_profile(source: str) -> dict:
     return best
 
 
-def collect(packages: list[str], *, cache: Path | None = None) -> dict[str, dict]:
+def collect(packages: list[str], *, cache: Path | None = None, force: bool = False) -> dict[str, dict]:
     """Fetch PyPI profiles for pip modules, caching results to disk."""
     cache = cache or (config.CACHE_DIR / "pypi.json")
     cached: dict[str, dict] = {}
-    if cache.exists():
+    if cache.exists() and not force:
         try:
             cached = json.loads(cache.read_text(encoding="utf-8"))
         except Exception:  # ruff: ignore[blind-except]

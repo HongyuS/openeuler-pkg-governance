@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as echarts from "echarts";
-import { fetchDigest, fetchStreams } from "./api";
+import {
+  fetchDigest,
+  fetchRefreshStatus,
+  fetchStreams,
+  startRefresh,
+  type RefreshScope,
+  type RefreshStatus,
+} from "./api";
 import type { Digest, StreamDef } from "./types";
 
 /**
@@ -16,6 +23,7 @@ export function useDashboard() {
   const [digest, setDigest] = useState<Digest | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [refresh, setRefresh] = useState<RefreshStatus | null>(null);
 
   const loadStreams = useCallback(async () => {
     const data = await fetchStreams();
@@ -49,10 +57,54 @@ export function useDashboard() {
     if (lts && innov) void loadDigest(lts, innov);
   }, [lts, innov, loadDigest]);
 
-  const refresh = useCallback(() => {
-    void loadDigest(lts, innov);
-    void loadStreams();
-  }, [lts, innov, loadDigest, loadStreams]);
+  /** Trigger a real online re-collection and follow it to completion. */
+  const refreshOnline = useCallback(
+    async (scope: RefreshScope = "quick") => {
+      try {
+        await startRefresh(scope);
+      } catch (e) {
+        setError(String(e));
+        return;
+      }
+      // Poll until the background job finishes, then reload everything.
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 1500));
+        let st: RefreshStatus;
+        try {
+          st = await fetchRefreshStatus();
+        } catch {
+          continue;
+        }
+        setRefresh(st);
+        if (!st.running) {
+          if (st.error) setError(st.error);
+          await loadStreams();
+          await loadDigest(lts, innov);
+          break;
+        }
+      }
+    },
+    [lts, innov, loadDigest, loadStreams]
+  );
+
+  // Resume progress display if a refresh was already running when we loaded.
+  useEffect(() => {
+    let stop = false;
+    const tick = async () => {
+      try {
+        const st = await fetchRefreshStatus();
+        if (!stop) setRefresh(st);
+      } catch {
+        /* ignore */
+      }
+    };
+    void tick();
+    const id = window.setInterval(tick, 5000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, []);
 
   const ltsStreams = useMemo(() => catalog.filter((s) => s.kind === "LTS"), [catalog]);
   const innovStreams = useMemo(
@@ -62,7 +114,7 @@ export function useDashboard() {
 
   return {
     catalog, defaultPair, lts, innov, setLts, setInnov,
-    digest, loading, error, refresh, ltsStreams, innovStreams,
+    digest, loading, error, refresh, refreshOnline, ltsStreams, innovStreams,
   };
 }
 

@@ -143,10 +143,13 @@ def _iter_devstation_builds() -> list[dict]:
             )
     # Keep only the newest few dailies to avoid noise.
     for date, d in sorted(dailies, reverse=True)[: int(config.INCLUDE_DEVSTATION_DAILY) * 3]:
+        # A day can hold several builds, so the id carries the full timestamp
+        # (the label stays human-readable).
+        stamp = date.replace("-", "").replace(":", "")
         builds.append(
             {
-                "id": f"{release}-daily-{date[:10].replace('-', '')}",
-                "label": f"{release} 每日构建 {date[:10]}",
+                "id": f"{release}-daily-{stamp}",
+                "label": f"{release} 每日构建 {date[:10]} {date[11:13]}:{date[14:16]}",
                 "base": f"{idx_url}{d}",
                 "date": date,
                 "rc": False,

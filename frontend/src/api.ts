@@ -19,3 +19,27 @@ export function fetchPackage(name: string, lts: string, innov: string): Promise<
   const q = new URLSearchParams({ lts, innov });
   return get(`/api/packages/${encodeURIComponent(name)}?${q.toString()}`);
 }
+
+export type RefreshScope = "quick" | "full";
+
+export interface RefreshStatus {
+  running: boolean;
+  scope: string;
+  step: string;
+  progress: number;
+  message: string;
+  started_at: string;
+  finished_at: string;
+  error: string;
+  result: Record<string, unknown>;
+}
+
+export async function startRefresh(scope: RefreshScope): Promise<{ started: boolean; status: RefreshStatus }> {
+  const r = await fetch(`/api/refresh?scope=${scope}`, { method: "POST" });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+
+export function fetchRefreshStatus(): Promise<RefreshStatus> {
+  return get("/api/refresh/status");
+}

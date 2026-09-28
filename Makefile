@@ -32,7 +32,7 @@ build:
 	cd $(BACKEND) && PYTHONPATH=. $(CURDIR)/$(PY) $(CURDIR)/scripts/build.py
 
 build-quick:
-	cd $(BACKEND) && PYTHONPATH=. $(CURDIR)/$(PY) $(CURDIR)/scripts/build.py --no-activity
+	cd $(BACKEND) && PYTHONPATH=. $(CURDIR)/$(PY) $(CURDIR)/scripts/build.py --quick
 
 seed:
 	cd $(BACKEND) && PYTHONPATH=. $(CURDIR)/$(PY) $(CURDIR)/scripts/seed.py

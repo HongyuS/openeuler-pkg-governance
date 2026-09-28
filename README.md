@@ -114,6 +114,20 @@ pkg-governance/
 | GET | `/api/packages/{name}?lts=&innov=` | 单包完整画像（随所选流） |
 | GET | `/api/packages/{name}/activity` | 该包月度活跃度序列 |
 | GET | `/api/reload` | 重新加载数据集缓存 |
+| POST | `/api/refresh?scope=quick\|full` | **在线刷新**：重新从公开 API 采集并重建数据集（后台任务） |
+| GET | `/api/refresh/status` | 刷新进度（step / progress / message / result） |
+
+### 在线刷新（页面右上“刷新数据”）
+
+“刷新数据”是真正的在线重采集，不是重新读缓存：后台线程调用 `app.build_job.run_build`，
+重新发现版本目录、重新下载各源 `repomd`/`primary`（repomd 每次必取，primary 以校验和命名，
+仓库更新即自动重下）、刷新 Ubuntu 基线与活跃度，最后重写 `packages.json` 并热加载。
+
+- **快速刷新（quick，默认）**：重新发现版本目录（新 RC/每日构建）+ 重采默认 LTS/创新 pair 的全源数据 + Ubuntu + 活跃度增量。
+- **全量刷新（full）**：在快速基础上，强制重采全部流的版本矩阵、活跃度、PyPI、npm、oemaker ISO 清单与 SIG 归属。
+
+页面顶部会显示进度条（如 `采集流版本：openEuler-26.09-DevStation-rc6`），完成后自动重载面板。
+CLI 等价命令：`python scripts/build.py --quick` 或 `python scripts/build.py`（全量）。
 
 ## 治理模型
 

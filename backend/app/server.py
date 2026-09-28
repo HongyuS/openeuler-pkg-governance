@@ -8,6 +8,8 @@ payload for the interactive single-page dashboard, and mounts the static SPA.
 from __future__ import annotations
 
 import json
+import threading
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -39,6 +41,58 @@ STATE: dict[str, Any] = {
     "stream_versions": {},
     "loaded_mtime": 0.0,
 }
+
+# ---------------------------------------------------------------------------
+# Online refresh job
+# ---------------------------------------------------------------------------
+REFRESH: dict[str, Any] = {
+    "running": False,
+    "scope": "",
+    "step": "idle",
+    "progress": 0,
+    "message": "",
+    "started_at": "",
+    "finished_at": "",
+    "error": "",
+    "result": {},
+    "log": [],
+}
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _run_refresh(scope: str) -> None:
+    """Background worker: re-collect from the public APIs and reload the cache."""
+    from app.build_job import run_build
+
+    def progress(step: str, pct: int, message: str) -> None:
+        REFRESH.update(step=step, progress=int(pct), message=message)
+        log = REFRESH.setdefault("log", [])
+        log.append({"at": _now(), "step": step, "progress": pct, "message": message})
+        del log[:-40]
+
+    try:
+        meta = run_build(scope, progress=progress)
+        _load_cache(force=True)
+        REFRESH.update(
+            running=False,
+            step="done",
+            progress=100,
+            message=f"刷新完成：{meta.get('total_sources')} 个源包",
+            finished_at=_now(),
+            error="",
+            result={
+                "total_sources": meta.get("total_sources"),
+                "streams": len(meta.get("streams", [])),
+                "default": meta.get("default", {}),
+                "data_date": meta.get("data_date", ""),
+            },
+        )
+    except Exception as exc:  # ruff: ignore[blind-except]
+        LOG.exception("refresh failed")
+        REFRESH.update(running=False, step="error", message=f"刷新失败：{exc}", finished_at=_now(), error=str(exc))
 
 
 def _load_cache(force: bool = False) -> None:
@@ -448,6 +502,33 @@ def reload_data() -> dict:
     """Force-reload the dataset cache and report the loaded package count."""
     _load_cache(force=True)
     return {"loaded": len(STATE["packages"])}
+
+
+@app.post("/api/refresh")
+def start_refresh(scope: str = Query("quick", pattern="^(quick|full)$")) -> dict:
+    """Start an online re-collection (fast `quick` or exhaustive `full`)."""
+    if REFRESH["running"]:
+        return {"started": False, "running": True, "status": REFRESH}
+    REFRESH.update(
+        running=True,
+        scope=scope,
+        step="starting",
+        progress=1,
+        message="启动在线刷新…",
+        started_at=_now(),
+        finished_at="",
+        error="",
+        result={},
+        log=[],
+    )
+    threading.Thread(target=_run_refresh, args=(scope,), name="online-refresh", daemon=True).start()
+    return {"started": True, "running": True, "status": REFRESH}
+
+
+@app.get("/api/refresh/status")
+def refresh_status() -> dict:
+    """Report progress of the running (or last) online refresh."""
+    return REFRESH
 
 
 def _filter(pkgs, *, q, p_level, grade, importance, disposal, lagging, sunset) -> list:

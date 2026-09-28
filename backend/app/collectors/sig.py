@@ -25,6 +25,8 @@ API_BASE = "https://api.gitcode.com/api/v5/repos/openeuler/community"
 FILE_CACHE = config.CACHE_DIR / "sig"
 REF = "master"
 SRC_PREFIX = "src-openeuler/"  # source-package repos, vs openeuler/<docs-repos>
+# Mutable holder instead of a module-level bool + ``global`` (see oemaker.py).
+_FORCE = {"on": False}
 
 
 def sig_names() -> list[str]:
@@ -41,7 +43,7 @@ def sig_names() -> list[str]:
 def _fetch_info(name: str) -> bytes:
     """Fetch one SIG's sig-info.yaml via the GitCode contents API, cached on disk."""
     dest: Path = FILE_CACHE / f"{name}.yaml"
-    if dest.exists() and dest.stat().st_size > 0:
+    if dest.exists() and dest.stat().st_size > 0 and not _FORCE["on"]:
         return dest.read_bytes()
     try:
         resp = http_get(f"{API_BASE}/contents/sig/{name}/sig-info.yaml", params={"ref": REF}, timeout=30)
@@ -86,7 +88,7 @@ def parse_info(data: bytes) -> dict:
     }
 
 
-def collect() -> dict:
+def collect(*, force: bool = False) -> dict:
     """Build the package->SIG map and per-SIG metadata.
 
     Returns ``{"pkg_sig": {package: [sig, ...]}, "sigs": {sig: {description,
@@ -94,6 +96,7 @@ def collect() -> dict:
     SIGs keeps every owner (rare; usually a transferred package), the pipeline
     stores the first one.
     """
+    _FORCE["on"] = force
     pkg_sig: dict[str, list[str]] = {}
     sigs: dict[str, dict] = {}
     names = sig_names()
