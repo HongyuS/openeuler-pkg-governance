@@ -28,18 +28,20 @@ make install
 # 2) 构建前端（pnpm）
 make ui
 
-# 3) 实时采集全量数据（公开 API，含活跃度约 3–4 分钟）
-make build            # 全量
-make build-quick      # 跳过活跃度深扫，更快
+# 3) 实时采集数据（公开 API，全量含活跃度约 3–4 分钟）
+make build            # 全量：所有流的版本矩阵 + 强制重采活跃度/PyPI/npm/ISO/SIG
+make build-quick      # 快速：默认 LTS/创新 pair 全源重采 + Ubuntu 基线，复用其余缓存
 
 # 4) 启动服务（带实例发现/端口管理），打开 http://127.0.0.1:8000
 make dev              # 停止 make stop / 状态 make status / 重启 make restart
 ```
 
-离线/快速重建：`make seed` 优先复用本地缓存生成确定性快照（会覆盖 `packages.json`）；
-仓库工作区已包含一份真实采集的 `data/cache/packages.json`，可直接 `make run` 查看效果。
+离线/快速重建：`make seed` 优先复用本地缓存生成确定性快照（会覆盖 `packages.json`）。
+首次克隆后需先跑一次 `make build` 或 `make build-quick` 生成 `backend/data/cache/packages.json`
+（该目录已 gitignore），之后 `make dev` 即可打开面板。
 
-`scripts/build.py` 支持按模块跳过采集：`--no-activity` / `--no-pypi` / `--no-npm` / `--no-oemaker` / `--no-sig`，以及 `--activity-limit N` 限制活跃度采样量。
+`scripts/build.py` 与页面右上"刷新数据"共用同一条流水线：`--quick`（快速刷新）或 `--scope full`
+（全量刷新），`--activity-limit N` 可限制活跃度采样量。全量/快速的数据口径见下文"在线刷新"。
 
 ## 数据来源（全部为公开 API，无需鉴权）
 
